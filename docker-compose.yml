@@ -1,0 +1,43 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: ../docker/Dockerfile.backend
+    ports:
+      - "8100:8100"
+    volumes:
+      - aegis_data:/app/data
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:////app/data/aegis_lite.db
+      - SECRET_KEY=${SECRET_KEY:-change-me-for-docker-use}
+      - LOCAL_DEV=${LOCAL_DEV:-false}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - PERPLEXITY_API_KEY=${PERPLEXITY_API_KEY:-}
+      - DEFAULT_MONTHLY_BUDGET=${DEFAULT_MONTHLY_BUDGET:-20.0}
+      - CORS_ORIGINS=http://localhost:3000
+      - AEGIS_EDITION=lite
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8100/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: ../docker/Dockerfile.frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - API_URL=http://backend:8100
+      - NEXT_PUBLIC_APP_NAME=Aegis Lite
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  aegis_data:
