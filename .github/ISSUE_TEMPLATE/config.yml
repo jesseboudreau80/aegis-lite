@@ -1,0 +1,12 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability disclosure
+    url: https://github.com/jesseboudreau80/aegis-lite/blob/main/SECURITY.md
+    about: >
+      For vulnerabilities in Aegis Lite itself, please use the private
+      disclosure process described in SECURITY.md — do not open a public issue.
+  - name: Questions & discussions
+    url: https://github.com/jesseboudreau80/aegis-lite/discussions
+    about: >
+      For general questions, deployment help, and design discussions,
+      use GitHub Discussions rather than Issues.

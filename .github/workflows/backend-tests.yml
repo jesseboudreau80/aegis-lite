@@ -1,0 +1,75 @@
+name: Backend Tests
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-tests.yml"
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - "backend/**"
+
+jobs:
+  test:
+    name: Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pytest pytest-asyncio
+
+      - name: Verify policy config loads
+        env:
+          LOCAL_DEV: "true"
+        run: |
+          python -c "
+          import sys; sys.path.insert(0, '.')
+          from config.policy_config import POLICY_VERSION, PII_RULES, SECRETS_RULES, INJECTION_PATTERNS
+          from config.model_registry import REGISTRY
+          from config.settings import settings
+          assert len(PII_RULES) >= 4, 'PII rules missing'
+          assert len(SECRETS_RULES) >= 9, 'Secrets rules missing'
+          assert len(INJECTION_PATTERNS) >= 20, 'Injection patterns missing'
+          print(f'Policy {POLICY_VERSION}: {len(PII_RULES)} PII rules, {len(SECRETS_RULES)} secret rules, {len(INJECTION_PATTERNS)} injection patterns')
+          print(f'Model registry: {len(REGISTRY)} models')
+          "
+
+      - name: Verify policy engine instantiates
+        env:
+          LOCAL_DEV: "true"
+        run: |
+          python -c "
+          import sys; sys.path.insert(0, '.')
+          from services.policy_engine import policy_engine, PolicyEngine
+          assert isinstance(policy_engine, PolicyEngine)
+          print('Policy engine: OK')
+          "
+
+      - name: Run test suite
+        env:
+          LOCAL_DEV: "true"
+        run: |
+          if [ -d tests ] && [ "$(ls tests/test_*.py 2>/dev/null | wc -l)" -gt 0 ]; then
+            PYTHONPATH=. pytest tests/ -v --tb=short
+          else
+            echo "No tests yet — skipping. See docs/github-issues/01-policy-engine-tests.md"
+          fi

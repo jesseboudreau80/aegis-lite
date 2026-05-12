@@ -1,0 +1,96 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Run weekly on Mondays at 08:00 UTC
+    - cron: "0 8 * * 1"
+
+jobs:
+  secrets-scan:
+    name: Secrets & OSS Safety Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Scan for enterprise identifiers
+        run: |
+          echo "Scanning for enterprise identifiers that must not appear in OSS..."
+          FOUND=0
+          patterns=(
+            "dpvet" "dp-vet" "DP Vet" "destpet" "reselleros"
+            "ThriftyClover" "AegisDemo123" "destpet1"
+            "mizmdmntpfwpjyscvotc" "supabase.co"
+          )
+          for pattern in "${patterns[@]}"; do
+            results=$(grep -rn "$pattern" . \
+              --include="*.py" --include="*.ts" --include="*.tsx" \
+              --include="*.yml" --include="*.yaml" --include="*.json" \
+              --include="*.md" --include="*.sh" \
+              --exclude-dir=".git" 2>/dev/null || true)
+            if [ -n "$results" ]; then
+              echo "FAIL: Found '$pattern':"
+              echo "$results"
+              FOUND=1
+            fi
+          done
+          if [ $FOUND -eq 0 ]; then
+            echo "✓ No enterprise identifiers found"
+          else
+            exit 1
+          fi
+
+      - name: Check for committed secrets
+        run: |
+          echo "Checking for accidentally committed secrets..."
+          FOUND=0
+          # Check for .env files that are not .env.example
+          if find . -name ".env" ! -name ".env.example" ! -path "./.git/*" | grep -q .; then
+            echo "FAIL: Found .env file(s):"
+            find . -name ".env" ! -name ".env.example" ! -path "./.git/*"
+            FOUND=1
+          fi
+          # Check for database files
+          if find . -name "*.db" -o -name "*.sqlite" -o -name "*.dump" | grep -q .; then
+            echo "FAIL: Found database file(s):"
+            find . \( -name "*.db" -o -name "*.sqlite" -o -name "*.dump" \) ! -path "./.git/*"
+            FOUND=1
+          fi
+          if [ $FOUND -eq 0 ]; then
+            echo "✓ No committed secrets or database files"
+          else
+            exit 1
+          fi
+
+  dependency-audit:
+    name: Dependency Audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Audit Python dependencies
+        working-directory: backend
+        run: |
+          pip install pip-audit
+          pip-audit -r requirements.txt --format=json || echo "::warning::Dependency vulnerabilities found — review pip-audit output"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Audit npm dependencies
+        working-directory: frontend
+        run: npm audit --audit-level=high || echo "::warning::npm audit found high-severity issues"
