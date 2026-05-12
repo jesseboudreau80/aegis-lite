@@ -52,6 +52,10 @@ docker compose up
 
 Open [http://localhost:3000](http://localhost:3000) — log in with `admin@example.com`.
 
+## Deploy
+
+- [Deploy on Railway](docs/deploy/RAILWAY.md) — managed PostgreSQL, HTTPS, and separate backend/frontend services.
+
 ### Local development
 
 **Backend:**
