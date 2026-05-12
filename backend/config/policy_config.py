@@ -105,6 +105,11 @@ PII_RULES: list[tuple[re.Pattern, str, str]] = [
         "credit_card",
         "redact",
     ),
+    (
+        re.compile(r"\b[A-Z]{2}\d{2}[A-Z0-9]{4}[0-9 ]{7,30}\b"),
+        "iban",
+        "redact",
+    ),
 ]
 
 PII_RISK_DELTA: float = 0.20
