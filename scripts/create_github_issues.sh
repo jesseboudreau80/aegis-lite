@@ -40,8 +40,9 @@ echo ""
 # ── Parse labels from "Labels:" line ─────────────────────────────────────────
 extract_labels() {
   local file="$1"
-  # Match lines containing **Labels:** or Labels: anywhere in the line
-  grep -i "\*\*Labels\*\*:\|^Labels:" "$file" 2>/dev/null \
+  # Issue files use format: **Labels:** `label-one` · `label-two`
+  # grep "Labels" is reliable — then extract backtick-quoted values
+  grep "Labels" "$file" 2>/dev/null \
     | head -1 \
     | grep -oP '`[^`]+`' \
     | tr -d '`' \
@@ -81,7 +82,7 @@ for file in "${files[@]}"; do
 
   if [[ -z "$title" ]]; then
     echo "  ⚠ Skipping $filename — no title found"
-    ((SKIPPED++))
+    SKIPPED=$((SKIPPED + 1))
     continue
   fi
 
@@ -92,7 +93,7 @@ for file in "${files[@]}"; do
 
   if [[ "$DRY_RUN" == true ]]; then
     echo "  [dry-run] Would create issue"
-    ((CREATED++))
+    CREATED=$((CREATED + 1))
     continue
   fi
 
@@ -112,12 +113,12 @@ for file in "${files[@]}"; do
       --repo "$REPO" \
       "${label_args[@]}" 2>/dev/null; then
     echo "  ✓ Created"
-    ((CREATED++))
+    CREATED=$((CREATED + 1))
     # Brief pause to avoid secondary rate limit
     sleep 2
   else
     echo "  ✗ FAILED — check label names match exactly what was created by setup_github_labels.sh"
-    ((FAILED++))
+    FAILED=$((FAILED + 1))
   fi
 done
 
