@@ -1,20 +1,10 @@
 # Contributing to Aegis Lite
 
-Thank you for your interest in contributing. This guide covers everything you need to get started.
+Thank you for contributing. Aegis Lite is an open-source AI governance platform and the community shapes what it becomes. This guide covers everything needed to contribute effectively.
 
-## Code of Conduct
+---
 
-This project follows the [Contributor Covenant](CODE_OF_CONDUCT.md). Be respectful, inclusive, and constructive.
-
-## Ways to contribute
-
-- **Bug reports** — open a GitHub issue with steps to reproduce
-- **Feature requests** — open an issue describing the use case
-- **Pull requests** — see the workflow below
-- **Documentation** — improvements to docs/ are always welcome
-- **Policy rules** — additions to the policy engine are especially valuable
-
-## Development setup
+## Quick start
 
 ```bash
 git clone https://github.com/jesseboudreau80/aegis-lite.git
@@ -22,49 +12,147 @@ cd aegis-lite
 
 # Backend
 cd backend
-python -m venv .venv && source .venv/bin/activate
+python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp ../.env.example .env
+cp ../.env.example .env  # set LOCAL_DEV=true for development
 LOCAL_DEV=true uvicorn main:app --reload --port 8100
 
-# Frontend (separate terminal)
-cd frontend
-npm install
-npm run dev
+# Frontend (new terminal)
+cd frontend && npm install && npm run dev
 ```
+
+Open [http://localhost:3000](http://localhost:3000). Sign in with `admin@example.com`.
+
+---
+
+## Where to start
+
+| Want to... | Go here |
+|-----------|---------|
+| Report a bug | [Bug report template](.github/ISSUE_TEMPLATE/bug_report.md) |
+| Propose a feature | [Feature request template](.github/ISSUE_TEMPLATE/feature_request.md) |
+| Add a policy rule | [Policy rule request template](.github/ISSUE_TEMPLATE/policy_rule_request.md) |
+| Submit a security detection | [Security rule submission](.github/ISSUE_TEMPLATE/security_rule_submission.md) |
+| Fix a doc error | [Documentation improvement](.github/ISSUE_TEMPLATE/documentation_improvement.md) |
+| Find good first work | [Issues labeled `good-first-issue`](https://github.com/jesseboudreau80/aegis-lite/labels/good-first-issue) |
+
+Starter issues are documented in `docs/github-issues/` with full technical context, acceptance criteria, and implementation hints.
+
+---
 
 ## Pull request workflow
 
-1. Fork the repository and create a feature branch from `main`
-2. Make your changes — keep each PR focused on one concern
-3. Run the test suite: `cd backend && python -m pytest`
-4. Run frontend type-check: `cd frontend && npm run build`
-5. Open a PR with a clear description of the change and why
+1. Fork the repository and create a branch from `main`:
+   ```bash
+   git checkout -b feat/your-feature-name
+   ```
 
-## Policy engine contributions
+2. Make your changes. Keep each PR focused on one concern.
 
-Policy rules in `backend/config/policy_config.py` and the engine in `backend/services/policy_engine.py` are the highest-value area for community contributions. When adding rules:
+3. Run the test suite:
+   ```bash
+   cd backend && LOCAL_DEV=true PYTHONPATH=. pytest tests/
+   ```
 
-- Add the constant to `policy_config.py` (not inline in the engine)
-- Document the pattern in a comment with the rationale
-- Add a test in `backend/tests/test_policy_engine.py`
-- Ensure the rule does not produce false positives on normal prompts
+4. Run the frontend type check:
+   ```bash
+   cd frontend && npm run build
+   ```
+
+5. Open a PR with:
+   - A clear title (imperative mood: "Add IBAN detection rule", not "Added")
+   - A description explaining **why**, not just what changed
+   - Reference to the issue being closed (`Closes #123`)
+
+---
+
+## What makes a good contribution
+
+**Policy engine rules:** The highest-value contribution area. Add constants to `policy_config.py`, the method to `policy_engine.py`, and tests in `tests/`. Include a rationale comment — policy changes should be as traceable as the decisions they govern.
+
+**Frontend improvements:** The governance dashboard, audit explorer, and chat interface all have room for visual and UX polish. Match the existing dark-theme design system (see `globals.css` for utility classes).
+
+**Tests:** The policy engine and AI router have minimal test coverage. Property-based tests and integration tests with mock providers are especially valuable.
+
+**Documentation:** Clear docs lower the barrier for new users and contributors. `docs/AGENT_SYSTEM.md` doesn't exist yet. Deployment guides (Railway, Fly.io) are missing.
+
+**Deployment guides:** Real-world deployment experience from contributors is more valuable than theoretical documentation.
+
+---
+
+## Code conventions
+
+**Python (backend)**
+- FastAPI for routes, SQLAlchemy async for DB, Pydantic v2 for validation
+- No comments that describe what code does — only why (non-obvious constraints, workarounds)
+- All policy constants in `config/policy_config.py`, never inline
+- Route handlers should be thin — business logic belongs in services
+
+**TypeScript (frontend)**
+- Next.js 15 App Router, TypeScript strict mode
+- Tailwind v4 + custom CSS classes from `globals.css` — avoid inline styles where a utility class exists
+- No `any` types without a comment explaining why
+- Components should handle loading and empty states explicitly
+
+**Git**
+- Commit messages: imperative, concise, focused on the why
+- One logical change per commit — avoid mixing formatting changes with logic changes
+- Never commit `.env`, `*.db`, `*.dump`, or secrets of any kind
+
+---
+
+## Policy rule contributions
+
+Policy rules require special care — they run on every AI request in production.
+
+**When adding a rule:**
+1. Add constants to `backend/config/policy_config.py` (never inline in the engine)
+2. Add the detection method to `backend/services/policy_engine.py`
+3. Call the method in the appropriate evaluation chain
+4. Add unit tests with: (a) content that should trigger, (b) content that should not, (c) edge cases
+5. Add a comment in `policy_config.py` explaining the threat the rule addresses
+
+**False positive risk:** Every rule that adds `pii_detected` or `sensitive_keywords_detected` will appear in every user's audit log when it fires. Rules that fire too broadly create noise that degrades the signal value of the audit trail.
+
+**Risk delta calibration:**
+- `0.10–0.20` — informational flags (data classification hints, agent overrides)
+- `0.20–0.35` — PII and sensitive keyword detection
+- `0.60–0.80` — high-confidence injection or classification violation
+- `0.95–1.0` — hard block (secrets detected, restricted data to external provider)
+
+---
 
 ## What belongs in Lite vs. Enterprise
 
-Aegis Lite is the open core. Features that require organizational coordination, cloud scale, or infrastructure-level access belong in the enterprise layer. When in doubt, open an issue to discuss.
+Aegis Lite is the open core. The following are in scope for community contributions:
 
-**Always welcome in Lite:**
-- New policy engine rules
-- Additional model providers
-- UI improvements to the governance dashboard
-- Developer experience improvements
-- Documentation and examples
+**In scope:**
+- Policy engine rules and detection improvements
+- Model provider integrations (new providers via OpenAI-compatible API)
+- Governance dashboard visualizations
+- Deployment documentation and tooling
+- Test coverage
+- Authentication improvements (OAuth, SSO stubs)
+- API improvements (export, filtering, pagination)
 
-## Commit messages
+**Out of scope (enterprise tier):**
+- SOC 2 control mapping and evidence collection
+- Infrastructure ecosystem registry
+- Governed action approval workflows
+- Cloudflare / tunnel integration
+- Kubernetes deployment manifests
+- Multi-tenant isolation
 
-Use the imperative mood: "Add PII rule for IBAN numbers" not "Added IBAN rule".
+If you're unsure, open an issue to discuss before investing time in a PR.
 
-## License
+---
+
+## Community
+
+- **Issues:** for bugs, feature requests, and policy rule requests
+- **Discussions:** for broader questions, deployment help, and design proposals
+- **Security disclosures:** see [SECURITY.md](SECURITY.md) — use private disclosure, not public issues
+
+All community members are expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 By contributing, you agree that your contributions will be licensed under the Apache License 2.0.

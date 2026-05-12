@@ -1,33 +1,47 @@
 # Contributor Covenant Code of Conduct
 
-## Our Pledge
+## Our pledge
 
-We as members, contributors, and leaders pledge to make participation in our community a harassment-free experience for everyone, regardless of age, body size, visible or invisible disability, ethnicity, sex characteristics, gender identity and expression, level of experience, education, socio-economic status, nationality, personal appearance, race, caste, color, religion, or sexual identity and orientation.
+We as members, contributors, and maintainers of Aegis Lite pledge to make participation in our community a harassment-free experience for everyone, regardless of age, body size, visible or invisible disability, ethnicity, sex characteristics, gender identity and expression, level of experience, education, socio-economic status, nationality, personal appearance, race, caste, color, religion, or sexual identity and orientation.
 
 We pledge to act and interact in ways that contribute to an open, welcoming, diverse, inclusive, and healthy community.
 
-## Our Standards
+---
 
-Examples of behavior that contributes to a positive environment:
+## Our standards
 
-- Demonstrating empathy and kindness toward other people
-- Being respectful of differing opinions, viewpoints, and experiences
+**Behaviors that contribute to a positive environment:**
+
+- Demonstrating empathy and kindness
+- Being respectful of differing technical opinions, viewpoints, and approaches
 - Giving and gracefully accepting constructive feedback
-- Accepting responsibility and apologizing to those affected by our mistakes
-- Focusing on what is best not just for us as individuals, but for the overall community
+- Acknowledging mistakes and learning from them
+- Focusing on what is best for the project and the community
 
-Examples of unacceptable behavior:
+**Behaviors that are not acceptable:**
 
-- The use of sexualized language or imagery, and sexual attention or advances of any kind
-- Trolling, insulting or derogatory comments, and personal or political attacks
-- Public or private harassment
-- Publishing others' private information without their explicit permission
-- Other conduct which could reasonably be considered inappropriate in a professional setting
+- Harassment, insults, or derogatory comments in any form
+- Publishing others' private information without their permission
+- Sustained disruption of project discussions
+- Personal attacks in code reviews or issue threads
+- Conduct that would be considered inappropriate in a professional setting
+
+---
 
 ## Enforcement
 
-Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to jesse.boudreau.dev@gmail.com. All complaints will be reviewed and investigated promptly and fairly.
+Instances of unacceptable behavior may be reported to the project maintainer at **jesse.boudreau.dev@gmail.com**. All reports will be reviewed promptly and treated with discretion.
+
+Maintainers are responsible for clarifying and enforcing these standards. Responses to violations may include: a warning, a temporary ban from project spaces, or a permanent ban.
+
+---
+
+## Scope
+
+This Code of Conduct applies to all project spaces — GitHub issues, pull requests, discussions, and any other communication channels associated with Aegis Lite.
+
+---
 
 ## Attribution
 
-This Code of Conduct is adapted from the [Contributor Covenant](https://www.contributor-covenant.org), version 2.1.
+Adapted from the [Contributor Covenant](https://www.contributor-covenant.org), version 2.1, available at [https://www.contributor-covenant.org/version/2/1/code_of_conduct.html](https://www.contributor-covenant.org/version/2/1/code_of_conduct.html).

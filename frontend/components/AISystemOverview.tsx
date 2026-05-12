@@ -4,70 +4,98 @@ import { useEffect, useState } from 'react'
 import { api } from '@/lib/api'
 import { AISystem } from '@/lib/types'
 
-const RISK_COLORS: Record<string, string> = {
-  low:      'text-green-400 bg-green-900/20 border-green-700/30',
-  medium:   'text-yellow-400 bg-yellow-900/20 border-yellow-700/30',
-  high:     'text-orange-400 bg-orange-900/20 border-orange-700/30',
-  critical: 'text-red-400 bg-red-900/20 border-red-700/30',
+const RISK_BADGE: Record<string, string> = {
+  low:      'badge badge-low',
+  medium:   'badge badge-medium',
+  high:     'badge badge-high',
+  critical: 'badge badge-critical',
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  active:     'text-green-400',
-  draft:      'text-gray-400',
-  deprecated: 'text-red-400',
+const STATUS_DOT: Record<string, string> = {
+  active:     'bg-emerald-500',
+  draft:      'bg-gray-600',
+  deprecated: 'bg-red-500',
+}
+
+function Skeleton() {
+  return (
+    <div className="card p-5 space-y-3">
+      <div className="skeleton w-36 h-3" />
+      <div className="skeleton w-full h-8" />
+      <div className="skeleton w-full h-8" />
+    </div>
+  )
 }
 
 export default function AISystemOverview() {
-  const [systems, setSystems] = useState<AISystem[]>([])
-  const [loading, setLoading] = useState(true)
+  const [systems, setSystems]   = useState<AISystem[]>([])
+  const [loading, setLoading]   = useState(true)
 
   useEffect(() => {
-    api.getSystems()
-      .then(res => setSystems(res.data as AISystem[]))
-      .catch(() => {})
-      .finally(() => setLoading(false))
+    api.getSystems().then(r => setSystems(r.data as AISystem[])).catch(() => {}).finally(() => setLoading(false))
   }, [])
 
-  if (loading) return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-      <div className="h-4 bg-gray-800 rounded w-40 mb-3 animate-pulse" />
-      <div className="h-8 bg-gray-800 rounded animate-pulse" />
-    </div>
-  )
+  if (loading) return <Skeleton />
 
-  const active = systems.filter(s => s.status === 'active').length
-  const high_risk = systems.filter(s => ['high', 'critical'].includes(s.risk_level)).length
+  const active    = systems.filter(s => s.status === 'active').length
+  const highRisk  = systems.filter(s => ['high', 'critical'].includes(s.risk_level)).length
+  const draft     = systems.filter(s => s.status === 'draft').length
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+    <div className="card p-5 fade-up">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-semibold text-white">AI System Registry</h2>
-        <div className="flex items-center gap-3 text-xs text-gray-500">
-          <span>{active} active</span>
-          {high_risk > 0 && <span className="text-orange-400">{high_risk} high-risk</span>}
+        <div>
+          <h2 className="text-sm font-semibold text-white">AI System Registry</h2>
+          <p className="text-[10px] text-gray-600 mt-0.5">{systems.length} registered systems</p>
+        </div>
+        <div className="flex items-center gap-3">
+          {active > 0 && (
+            <div className="flex items-center gap-1.5">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 pulse-dot" />
+              <span className="text-[10px] text-gray-500">{active} active</span>
+            </div>
+          )}
+          {highRisk > 0 && (
+            <span className="badge badge-high">{highRisk} high-risk</span>
+          )}
+          {draft > 0 && (
+            <span className="badge badge-info">{draft} draft</span>
+          )}
         </div>
       </div>
 
       {systems.length === 0 ? (
-        <p className="text-xs text-gray-500">No AI systems registered. Register systems in the AI Registry.</p>
+        <div className="py-6 text-center">
+          <p className="text-xs text-gray-500 mb-1">No systems registered</p>
+          <p className="text-[10px] text-gray-600">
+            Register AI systems in the{' '}
+            <a href="/governance/systems" className="text-blue-400 hover:underline">AI Registry</a> to track governance.
+          </p>
+        </div>
       ) : (
-        <div className="space-y-2">
-          {systems.slice(0, 5).map(s => (
-            <div key={s.id} className="flex items-center justify-between py-1.5 border-b border-gray-800 last:border-0">
-              <div className="min-w-0">
-                <p className="text-xs text-gray-200 font-medium truncate">{s.name}</p>
-                {s.department && <p className="text-[10px] text-gray-500">{s.department}</p>}
+        <div className="space-y-1.5">
+          {systems.slice(0, 6).map(s => (
+            <div key={s.id}
+              className="flex items-center justify-between px-3 py-2.5 rounded-lg transition-colors hover:bg-white/[0.03]"
+              style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.03)' }}>
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${STATUS_DOT[s.status] || 'bg-gray-600'}`} />
+                <div className="min-w-0">
+                  <p className="text-xs text-gray-200 font-medium truncate">{s.name}</p>
+                  {s.department && <p className="text-[10px] text-gray-600">{s.department}</p>}
+                </div>
               </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <span className={`px-1.5 py-0.5 text-[10px] rounded border ${RISK_COLORS[s.risk_level] || RISK_COLORS.medium}`}>
-                  {s.risk_level}
-                </span>
-                <span className={`text-[10px] ${STATUS_COLORS[s.status] || 'text-gray-400'}`}>
-                  {s.status}
-                </span>
+              <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+                <span className={RISK_BADGE[s.risk_level] || 'badge badge-medium'}>{s.risk_level}</span>
               </div>
             </div>
           ))}
+          {systems.length > 6 && (
+            <p className="text-[10px] text-gray-600 text-center pt-1">
+              +{systems.length - 6} more —{' '}
+              <a href="/governance/systems" className="text-blue-400 hover:underline">view all</a>
+            </p>
+          )}
         </div>
       )}
     </div>
