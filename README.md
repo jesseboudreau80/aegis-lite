@@ -134,6 +134,7 @@ See [docs/POLICY_ENGINE.md](docs/POLICY_ENGINE.md) for the full rule taxonomy.
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). All contributions are welcome.
+For agent internals and governance flow, see [docs/AGENT_SYSTEM.md](docs/AGENT_SYSTEM.md).
 
 ## Security
 
