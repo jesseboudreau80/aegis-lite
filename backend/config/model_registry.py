@@ -276,6 +276,10 @@ def free_fallback_id() -> str:
     return ids[0] if ids else "mistral"
 
 
+def premium_model_ids() -> set[str]:
+    return {m["id"] for m in REGISTRY.values() if m["tier"] == "premium" and m["enabled"]}
+
+
 def ui_models() -> list[dict]:
     _tier_order = {"premium": 0, "standard": 1, "budget": 2, "free": 3}
     visible = [m for m in REGISTRY.values() if m["visible_in_ui"] and m["enabled"]]
