@@ -25,8 +25,6 @@ class Settings(BaseSettings):
     app_name: str = "Aegis Lite"
     aegis_edition: str = "lite"
     debug: bool = False
-    # Set LOCAL_DEV=true in .env to allow weak secrets in development.
-    # Never enable in production.
     local_dev: bool = False
 
     database_url: str = "sqlite+aiosqlite:///./aegis_lite.db"
@@ -44,10 +42,20 @@ class Settings(BaseSettings):
 
     cors_origins: str = "http://localhost:3000,http://localhost:3001"
 
+    # Demo mode — enables seeded public-safe data, disables sensitive exposure.
+    # Set DEMO_MODE=true in .env for the public demo deployment.
+    demo_mode: bool = False
+
+    # Public site URL — used in demo mode for CORS and status links.
+    public_url: str = "http://localhost:3000"
+
+    # Deployment metadata — surfaced in /status (never exposes secrets).
+    deployment_name: str = "local"
+
     @model_validator(mode="after")
     def validate_production_settings(self) -> "Settings":
         """Reject weak secrets when running in production (not local_dev, not debug)."""
-        if self.local_dev or self.debug:
+        if self.local_dev or self.debug or self.demo_mode:
             return self
 
         normalized = self.secret_key.lower().strip()

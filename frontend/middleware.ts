@@ -2,7 +2,12 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 const PUBLIC_EXACT = new Set(['/', '/login'])
-const PUBLIC_PREFIXES = ['/api/auth/']
+const PUBLIC_PREFIXES = [
+  '/api/auth/',    // login + magic-link endpoints
+  '/api/status',   // public system status (no auth)
+  '/api/health',   // liveness probe
+  '/api/models',   // model list for landing page
+]
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl

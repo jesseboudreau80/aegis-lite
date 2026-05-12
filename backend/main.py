@@ -188,6 +188,7 @@ from routes.conversations import router as conversations_router
 from routes.governance import router as governance_router
 from routes.registry import router as registry_router
 from routes.research import router as research_router
+from routes.status import router as status_router
 from routes.support import router as support_router
 from routes.training import router as training_router
 from routes.usage import router as usage_router
@@ -201,6 +202,7 @@ app.include_router(conversations_router)
 app.include_router(governance_router)
 app.include_router(registry_router)
 app.include_router(research_router)
+app.include_router(status_router)
 app.include_router(support_router)
 app.include_router(training_router)
 app.include_router(usage_router)
@@ -212,10 +214,11 @@ app.include_router(users_router)
 @app.get("/health")
 async def health():
     return {
-        "status":  "ok",
-        "edition": settings.aegis_edition,
-        "version": "1.0.0",
-        "models":  len(MODEL_INFO),
+        "status":    "ok",
+        "edition":   settings.aegis_edition,
+        "version":   "1.0.0",
+        "demo_mode": settings.demo_mode,
+        "models":    len(MODEL_INFO),
     }
 
 

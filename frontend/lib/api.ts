@@ -136,8 +136,10 @@ export const api = {
   supportChat: (sessionId: string, message: string) => _client.post(`/support/${sessionId}/messages`, { message }),
   getRoutingMatrix: () => _client.get('/support/routing-matrix'),
 
-  // Health
-  health: () => _client.get('/health'),
+  // Health & Status (public — no auth required)
+  health:         () => _client.get('/health'),
+  getStatus:      () => _client.get('/status'),
+  getDemoEvents:  (count = 20) => _client.get(`/status/demo-events?count=${count}`),
 }
 
 export default _client
