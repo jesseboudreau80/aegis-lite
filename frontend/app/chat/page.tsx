@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/context/AuthContext'
-import { api } from '@/lib/api'
+import { api, STORAGE_KEY_JWT } from '@/lib/api'
 import { Conversation, ModelInfo, ExecutionTraceStep } from '@/lib/types'
 import AppNav from '@/components/AppNav'
 import LogoutButton from '@/components/LogoutButton'
@@ -38,7 +38,7 @@ const ACCEPTED_EXTENSIONS = new Set([
   'txt', 'md', 'csv', 'json', 'yaml', 'yml', 'xml', 'html', 'css',
   'py', 'js', 'ts', 'tsx', 'jsx', 'go', 'rs', 'sql', 'sh', 'log',
 ])
-const MAX_FILE_BYTES = 512 * 1024  // 512 KB
+const MAX_FILE_BYTES = 512 * 1024
 
 interface Attachment {
   id: string
@@ -58,12 +58,12 @@ function scanAttachment(name: string, size: number, content: string): Pick<Attac
     return { scanStatus: 'warned', scanNote: 'Possible SSN pattern — classified as sensitive, governance policy applied' }
   }
   if (size > 256 * 1024) {
-    return { scanStatus: 'approved', scanNote: 'Large file — first 2000 chars sent to governed inference' }
+    return { scanStatus: 'approved', scanNote: 'Large file — first 5000 chars sent to governed inference' }
   }
-  return { scanStatus: 'approved', scanNote: 'Scanned · no sensitive patterns detected · governance-cleared for dispatch' }
+  return { scanStatus: 'approved', scanNote: 'Scanned · no sensitive patterns detected · cleared for dispatch' }
 }
 
-// ── Governance pipeline trace ──────────────────────────────────────────────────
+// ── Governance pipeline ────────────────────────────────────────────────────────
 interface GovernanceMeta {
   execution_trace: ExecutionTraceStep[]
   policy_warning: string | null
@@ -132,24 +132,37 @@ function GovernancePipeline({ meta }: { meta: GovernanceMeta }) {
       {meta.budget_pct !== null && meta.budget_pct >= 80 && (
         <div className="flex items-center gap-1.5 text-[10px] text-amber-600 pl-1">
           <div className="w-1 h-1 rounded-full bg-amber-500 flex-shrink-0" />
-          <span>Budget {meta.budget_pct.toFixed(0)}% used — premium models will be downgraded</span>
+          <span>Budget {meta.budget_pct.toFixed(0)}% used</span>
         </div>
       )}
     </div>
   )
 }
 
-// ── Local message type ─────────────────────────────────────────────────────────
+// ── Message types ──────────────────────────────────────────────────────────────
 interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
   content: string
   created_at: string
-  routing_info?: { model: string; fallback_used: boolean; reason: string }
+  isStreaming?: boolean
   attachmentCount?: number
 }
 
 const DEFAULT_MODEL = 'llama3'
+
+// ── SSE stream parser ──────────────────────────────────────────────────────────
+function parseSSELines(chunk: string): unknown[] {
+  const events: unknown[] = []
+  const lines = chunk.split('\n')
+  for (const line of lines) {
+    if (!line.startsWith('data: ')) continue
+    try {
+      events.push(JSON.parse(line.slice(6)))
+    } catch { /* skip malformed */ }
+  }
+  return events
+}
 
 export default function ChatPage() {
   const { user, loading: authLoading } = useAuth()
@@ -163,19 +176,23 @@ export default function ChatPage() {
   const [governanceMap, setGovernanceMap] = useState<Map<string, GovernanceMeta>>(new Map())
   const [input, setInput]                 = useState('')
   const [sending, setSending]             = useState(false)
+  const [isStreaming, setIsStreaming]     = useState(false)
   const [error, setError]                 = useState<string | null>(null)
   const [sidebarOpen, setSidebarOpen]     = useState(false)
 
   // Attachments
-  const [attachments, setAttachments]     = useState<Attachment[]>([])
-  const [dragOver, setDragOver]           = useState(false)
+  const [attachments, setAttachments]       = useState<Attachment[]>([])
+  const [dragOver, setDragOver]             = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Voice
-  const [isRecording, setIsRecording]     = useState(false)
+  const [isRecording, setIsRecording]       = useState(false)
   const [voiceSupported, setVoiceSupported] = useState(false)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null)
+
+  // Streaming abort
+  const abortRef = useRef<AbortController | null>(null)
 
   const bottomRef   = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -202,14 +219,14 @@ export default function ChatPage() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // Check voice support
+  // Voice support check
   useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const w = window as any
     setVoiceSupported(!!(w.SpeechRecognition || w.webkitSpeechRecognition))
   }, [])
 
-  // ── Voice input ──────────────────────────────────────────────────────────────
+  // ── Voice ────────────────────────────────────────────────────────────────────
   const toggleVoice = useCallback(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const w = window as any
@@ -235,56 +252,41 @@ export default function ChatPage() {
         .join('')
       setInput(transcript)
     }
-
-    recognition.onend = () => {
-      setIsRecording(false)
-      textareaRef.current?.focus()
-    }
-
-    recognition.onerror = () => {
-      setIsRecording(false)
-    }
+    recognition.onend = () => { setIsRecording(false); textareaRef.current?.focus() }
+    recognition.onerror = () => { setIsRecording(false) }
 
     recognitionRef.current = recognition
     recognition.start()
     setIsRecording(true)
   }, [isRecording])
 
-  // ── File attachments ─────────────────────────────────────────────────────────
+  // ── Attachments ──────────────────────────────────────────────────────────────
   const processFiles = useCallback((files: FileList | File[]) => {
-    const fileArr = Array.from(files)
-    fileArr.forEach(file => {
+    Array.from(files).forEach(file => {
       const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
       if (!ACCEPTED_EXTENSIONS.has(ext)) {
-        setError(`Unsupported file type: .${ext}. Accepted: text, code, csv, json, markdown.`)
+        setError(`Unsupported file type: .${ext}`)
         return
       }
       if (file.size > MAX_FILE_BYTES) {
         setError(`File too large: ${fmtBytes(file.size)}. Max 512 KB.`)
         return
       }
-
       const reader = new FileReader()
       reader.onload = (e) => {
         const content = (e.target?.result as string) || ''
-        const scan = scanAttachment(file.name, file.size, content)
-        const attachment: Attachment = {
+        setAttachments(prev => [...prev, {
           id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-          name: file.name,
-          size: file.size,
-          content,
-          ...scan,
-        }
-        setAttachments(prev => [...prev, attachment])
+          name: file.name, size: file.size, content,
+          ...scanAttachment(file.name, file.size, content),
+        }])
         setError(null)
       }
       reader.readAsText(file)
     })
   }, [])
 
-  const removeAttachment = useCallback((id: string) => {
-    setAttachments(prev => prev.filter(a => a.id !== id))
-  }, [])
+  const removeAttachment = (id: string) => setAttachments(prev => prev.filter(a => a.id !== id))
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -292,78 +294,162 @@ export default function ChatPage() {
     if (e.dataTransfer.files.length) processFiles(e.dataTransfer.files)
   }, [processFiles])
 
-  // ── Send ─────────────────────────────────────────────────────────────────────
+  // ── Stop generation ──────────────────────────────────────────────────────────
+  const stopGeneration = useCallback(() => {
+    abortRef.current?.abort()
+    abortRef.current = null
+    setIsStreaming(false)
+    setSending(false)
+    // Finalize any partial streaming message
+    setMessages(m => m.map(msg => msg.isStreaming ? { ...msg, isStreaming: false } : msg))
+  }, [])
+
+  // ── Send (streaming) ──────────────────────────────────────────────────────────
   const handleSend = async () => {
     const text = input.trim()
     if (!text || sending) return
     setInput('')
     setSending(true)
+    setIsStreaming(false)
     setError(null)
 
-    // Take snapshot of current attachments then clear
     const sendAttachments = [...attachments]
     setAttachments([])
 
-    const tempId = `temp-${Date.now()}`
+    const userTempId = `user-${Date.now()}`
     setMessages(m => [...m, {
-      id: tempId, role: 'user', content: text,
+      id: userTempId, role: 'user', content: text,
       created_at: new Date().toISOString(),
       attachmentCount: sendAttachments.length,
     }])
 
+    const jwt = localStorage.getItem(STORAGE_KEY_JWT) ?? ''
+    const abort = new AbortController()
+    abortRef.current = abort
+
+    const streamingId = `streaming-${Date.now()}`
+
     try {
-      const firstAtt = sendAttachments[0]
-      const res = await api.chat({
-        message: text,
-        model: selectedModel,
-        conversation_id: activeConvId,
-        file_content: firstAtt ? firstAtt.content.slice(0, 4000) : undefined,
-        file_name: firstAtt ? firstAtt.name : undefined,
+      const resp = await fetch('/api/chat/stream', {
+        method:  'POST',
+        headers: {
+          'Content-Type':  'application/json',
+          'Authorization': `Bearer ${jwt}`,
+        },
+        body: JSON.stringify({
+          message:         text,
+          model:           selectedModel,
+          conversation_id: activeConvId,
+          file_content:    sendAttachments[0]?.content.slice(0, 4000),
+          file_name:       sendAttachments[0]?.name,
+        }),
+        signal: abort.signal,
       })
-      const d = res.data as {
-        conversation_id: string
-        message_id: string
-        response: string
-        model: string
-        routing_info?: { model: string; fallback_used: boolean; reason: string }
-        policy_warning?: string | null
-        model_override?: { original: string; actual: string; reason: string } | null
-        execution_trace?: ExecutionTraceStep[]
-        budget_info?: { percentage_used: number }
+
+      if (!resp.ok) {
+        const errData = await resp.json().catch(() => ({}))
+        throw new Error((errData as { detail?: string }).detail || `HTTP ${resp.status}`)
       }
 
-      if (!activeConvId) setActiveConvId(d.conversation_id)
+      const reader = resp.body!.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let gotMeta = false
 
-      const msgId = d.message_id
-      setMessages(m => [
-        ...m.filter(msg => msg.id !== tempId),
-        { id: tempId + '-u', role: 'user', content: text, created_at: new Date().toISOString(), attachmentCount: sendAttachments.length },
-        { id: msgId, role: 'assistant', content: d.response, created_at: new Date().toISOString(), routing_info: d.routing_info },
-      ])
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
 
-      if (d.execution_trace?.length) {
-        setGovernanceMap(prev => {
-          const next = new Map(prev)
-          next.set(msgId, {
-            execution_trace: d.execution_trace!,
-            policy_warning:  d.policy_warning  ?? null,
-            model_override:  d.model_override  ?? null,
-            budget_pct:      d.budget_info?.percentage_used ?? null,
-          })
-          return next
-        })
+        buffer += decoder.decode(value, { stream: true })
+        const newline2 = buffer.lastIndexOf('\n\n')
+        if (newline2 === -1) continue
+
+        const chunk = buffer.slice(0, newline2 + 2)
+        buffer = buffer.slice(newline2 + 2)
+
+        const events = parseSSELines(chunk)
+        for (const evt of events) {
+          const e = evt as Record<string, unknown>
+
+          if (e.type === 'meta') {
+            gotMeta = true
+            setIsStreaming(true)
+            if (!activeConvId && e.conversation_id) setActiveConvId(e.conversation_id as string)
+            // Insert blank streaming assistant message
+            setMessages(m => [...m, {
+              id: streamingId, role: 'assistant', content: '',
+              created_at: new Date().toISOString(), isStreaming: true,
+            }])
+            // Show pre-inference governance trace
+            if ((e.execution_trace as ExecutionTraceStep[] | undefined)?.length) {
+              setGovernanceMap(prev => {
+                const next = new Map(prev)
+                next.set(streamingId, {
+                  execution_trace: e.execution_trace as ExecutionTraceStep[],
+                  policy_warning:  (e.policy_warning as string | null) ?? null,
+                  model_override:  null,
+                  budget_pct:      null,
+                })
+                return next
+              })
+            }
+
+          } else if (e.type === 'token') {
+            setMessages(m => m.map(msg =>
+              msg.id === streamingId
+                ? { ...msg, content: msg.content + (e.content as string) }
+                : msg
+            ))
+            bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+
+          } else if (e.type === 'done') {
+            const msgId = e.message_id as string
+            if (!activeConvId && e.conversation_id) setActiveConvId(e.conversation_id as string)
+
+            // Replace streaming placeholder with real message_id
+            setMessages(m => m.map(msg =>
+              msg.id === streamingId
+                ? { ...msg, id: msgId, isStreaming: false }
+                : msg
+            ))
+
+            // Final governance metadata with real cost
+            if ((e.execution_trace as ExecutionTraceStep[] | undefined)?.length) {
+              setGovernanceMap(prev => {
+                const next = new Map(prev)
+                // Remove placeholder entry
+                next.delete(streamingId)
+                next.set(msgId, {
+                  execution_trace: e.execution_trace as ExecutionTraceStep[],
+                  policy_warning:  (e.policy_warning as string | null) ?? null,
+                  model_override:  (e.model_override as GovernanceMeta['model_override']) ?? null,
+                  budget_pct:      (e.budget_info as { percentage_used?: number } | undefined)?.percentage_used ?? null,
+                })
+                return next
+              })
+            }
+
+            const routedModel = e.model as string
+            if (routedModel && routedModel !== selectedModel) setSelectedModel(routedModel)
+            api.getConversations().then(r => setConversations(r.data as Conversation[])).catch(() => {})
+          }
+        }
       }
 
-      if (d.routing_info?.model && d.routing_info.model !== selectedModel) {
-        setSelectedModel(d.routing_info.model)
-      }
-      api.getConversations().then(r => setConversations(r.data as Conversation[])).catch(() => {})
+      if (!gotMeta) throw new Error('No response from server.')
+
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || 'Failed to send message.'
-      setError(msg)
-      setMessages(m => m.filter(msg => msg.id !== tempId))
+      if ((err as Error).name === 'AbortError') {
+        // User stopped — leave partial message
+      } else {
+        const msg = (err as Error).message || 'Failed to send message.'
+        setError(msg)
+        setMessages(m => m.filter(msg => msg.id !== userTempId && msg.id !== streamingId))
+      }
     } finally {
+      setIsStreaming(false)
       setSending(false)
+      abortRef.current = null
     }
   }
 
@@ -449,8 +535,16 @@ export default function ChatPage() {
           <AppNav currentPage="/chat" />
 
           <div className="ml-auto flex items-center gap-2">
+            {/* Streaming status indicator */}
+            {isStreaming && (
+              <div className="flex items-center gap-1.5 mr-1">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="text-[10px] font-mono text-emerald-600 hidden sm:block">streaming</span>
+              </div>
+            )}
             <select value={selectedModel} onChange={e => setSelectedModel(e.target.value)}
-              className="text-[11px] border rounded-lg px-2 py-1 focus:outline-none focus:border-blue-500/50 transition-colors cursor-pointer"
+              disabled={sending}
+              className="text-[11px] border rounded-lg px-2 py-1 focus:outline-none focus:border-blue-500/50 transition-colors cursor-pointer disabled:opacity-50"
               style={{ background: 'var(--surface-3)', borderColor: 'rgba(255,255,255,0.08)', color: '#9ca3af' }}>
               {models.map(m => (
                 <option key={m.id} value={m.id}>{governedLabel(m)}</option>
@@ -472,10 +566,14 @@ export default function ChatPage() {
               <h2 className="text-sm font-semibold text-white mb-2">Governed AI Workspace</h2>
               <p className="text-[12px] text-gray-500 leading-relaxed max-w-xs mb-6">
                 Every request is evaluated through the Aegis Lite policy engine before model execution.
-                Secrets, PII, and prompt injection attempts are intercepted automatically.
+                Responses stream in real-time with live governance telemetry.
               </p>
               <div className="space-y-1.5 font-mono text-[9px] text-gray-700">
-                {['Policy engine active · 10 rules · v1.1.0', 'Immutable audit logging enabled', 'Voice + file input · governance-evaluated'].map(l => (
+                {[
+                  'Policy engine active · 10 rules · v1.1.0',
+                  'Streaming inference · token-by-token',
+                  'Voice + file input · governance-evaluated',
+                ].map(l => (
                   <div key={l} className="flex items-center gap-1.5 justify-center">
                     <span className="text-emerald-700">✓</span>
                     <span>{l}</span>
@@ -488,7 +586,7 @@ export default function ChatPage() {
               {messages.map(m => (
                 <div key={m.id} className={`flex gap-3 ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                   {m.role === 'assistant' && (
-                    <div className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"
+                    <div className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 flex-shrink-0"
                       style={{ background: 'linear-gradient(135deg, #3b82f6, #6366f1)' }}>
                       <span className="text-white text-[10px] font-bold">A</span>
                     </div>
@@ -503,41 +601,37 @@ export default function ChatPage() {
                       style={m.role === 'user'
                         ? { background: 'linear-gradient(135deg, #2563eb, #4f46e5)' }
                         : { background: 'var(--surface-2)' }}
-                      dangerouslySetInnerHTML={{
-                        __html: m.role === 'assistant'
-                          ? formatContent(m.content)
-                          : m.content.replace(/\n/g, '<br/>')
-                      }}
-                    />
+                    >
+                      {m.role === 'assistant' ? (
+                        <>
+                          <span dangerouslySetInnerHTML={{ __html: formatContent(m.content) }} />
+                          {m.isStreaming && (
+                            <span
+                              className="inline-block w-0.5 h-3.5 ml-0.5 align-middle"
+                              style={{
+                                background: '#6366f1',
+                                animation: 'blink 1s step-end infinite',
+                              }}
+                            />
+                          )}
+                        </>
+                      ) : (
+                        <span dangerouslySetInnerHTML={{ __html: m.content.replace(/\n/g, '<br/>') }} />
+                      )}
+                    </div>
+
                     {m.role === 'user' && m.attachmentCount ? (
                       <p className="text-[9px] font-mono text-gray-700 mt-1 text-right">
                         + {m.attachmentCount} attachment{m.attachmentCount > 1 ? 's' : ''} · governance-evaluated
                       </p>
                     ) : null}
+
                     {m.role === 'assistant' && governanceMap.has(m.id) && (
                       <GovernancePipeline meta={governanceMap.get(m.id)!} />
                     )}
                   </div>
                 </div>
               ))}
-
-              {sending && (
-                <div className="flex gap-3">
-                  <div className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0"
-                    style={{ background: 'linear-gradient(135deg, #3b82f6, #6366f1)' }}>
-                    <span className="text-white text-[10px] font-bold">A</span>
-                  </div>
-                  <div className="rounded-2xl rounded-bl-sm px-3.5 py-2.5 border border-white/[0.07]"
-                    style={{ background: 'var(--surface-2)' }}>
-                    <div className="flex gap-1 items-center h-4">
-                      {[0, 1, 2].map(i => (
-                        <div key={i} className="typing-dot w-1.5 h-1.5 bg-gray-500 rounded-full"
-                          style={{ animationDelay: `${i * 0.15}s` }} />
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
 
               {error && (
                 <div className="mx-auto max-w-sm text-xs text-red-400 border border-red-500/20 rounded-xl px-3 py-2.5 text-center"
@@ -554,12 +648,11 @@ export default function ChatPage() {
         <div className="flex-shrink-0 border-t border-white/[0.06] px-4 py-3">
           <div className="max-w-2xl mx-auto">
 
-            {/* Drag overlay */}
             <div
               className={`relative rounded-xl border transition-all ${
-                dragOver ? 'border-blue-500/50 bg-blue-500/5' : 'border-white/[0.09]'
+                dragOver ? 'border-blue-500/50' : 'border-white/[0.09]'
               } focus-within:border-blue-500/40`}
-              style={{ background: dragOver ? undefined : 'var(--surface-2)' }}
+              style={{ background: dragOver ? 'rgba(59,130,246,0.04)' : 'var(--surface-2)' }}
               onDragOver={e => { e.preventDefault(); setDragOver(true) }}
               onDragLeave={() => setDragOver(false)}
               onDrop={handleDrop}
@@ -568,7 +661,8 @@ export default function ChatPage() {
               {attachments.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 px-3 pt-2.5 pb-0">
                   {attachments.map(att => (
-                    <div key={att.id} className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-[10px] font-mono transition-colors group"
+                    <div key={att.id}
+                      className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-[10px] font-mono"
                       style={{
                         background: att.scanStatus === 'warned' ? 'rgba(245,158,11,0.08)' : 'rgba(59,130,246,0.08)',
                         border: `1px solid ${att.scanStatus === 'warned' ? 'rgba(245,158,11,0.2)' : 'rgba(59,130,246,0.18)'}`,
@@ -580,13 +674,6 @@ export default function ChatPage() {
                         {att.name}
                       </span>
                       <span className="text-gray-700">{fmtBytes(att.size)}</span>
-                      {att.scanStatus === 'warned' && (
-                        <span title={att.scanNote}>
-                          <svg className="w-2.5 h-2.5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
-                          </svg>
-                        </span>
-                      )}
                       <button onClick={() => removeAttachment(att.id)}
                         className="text-gray-700 hover:text-gray-400 transition-colors cursor-pointer ml-0.5">
                         <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -600,30 +687,22 @@ export default function ChatPage() {
 
               {/* Input row */}
               <div className="flex items-end gap-1.5 px-2 py-2">
-                {/* Attachment button */}
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
+                {/* Attachment */}
+                <button type="button" onClick={() => fileInputRef.current?.click()}
                   title="Attach file"
-                  className="flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center text-gray-600 hover:text-gray-300 hover:bg-white/[0.06] transition-all cursor-pointer"
-                >
+                  className="flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center text-gray-600 hover:text-gray-300 hover:bg-white/[0.06] transition-all cursor-pointer">
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
                   </svg>
                 </button>
 
-                {/* Voice button */}
+                {/* Mic */}
                 {voiceSupported && (
-                  <button
-                    type="button"
-                    onClick={toggleVoice}
+                  <button type="button" onClick={toggleVoice}
                     title={isRecording ? 'Stop recording' : 'Voice input'}
                     className={`flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center transition-all cursor-pointer ${
-                      isRecording
-                        ? 'bg-red-500/15 text-red-400 hover:bg-red-500/20'
-                        : 'text-gray-600 hover:text-gray-300 hover:bg-white/[0.06]'
-                    }`}
-                  >
+                      isRecording ? 'bg-red-500/15 text-red-400' : 'text-gray-600 hover:text-gray-300 hover:bg-white/[0.06]'
+                    }`}>
                     {isRecording ? (
                       <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
                         <rect x="6" y="6" width="12" height="12" rx="2" />
@@ -636,7 +715,6 @@ export default function ChatPage() {
                   </button>
                 )}
 
-                {/* Divider */}
                 <div className="w-px h-4 flex-shrink-0" style={{ background: 'rgba(255,255,255,0.07)' }} />
 
                 {/* Textarea */}
@@ -652,17 +730,27 @@ export default function ChatPage() {
                   style={{ lineHeight: '1.5' }}
                 />
 
-                {/* Send button */}
-                <button onClick={handleSend} disabled={!input.trim() || sending}
-                  className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center transition-all disabled:opacity-30 hover:opacity-90 cursor-pointer disabled:cursor-default"
-                  style={{ background: 'linear-gradient(135deg, #3b82f6, #6366f1)' }}>
-                  <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                  </svg>
-                </button>
+                {/* Stop / Send */}
+                {isStreaming ? (
+                  <button onClick={stopGeneration}
+                    title="Stop generation"
+                    className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center cursor-pointer transition-all hover:opacity-80"
+                    style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.25)' }}>
+                    <svg className="w-3 h-3 text-red-400" fill="currentColor" viewBox="0 0 24 24">
+                      <rect x="5" y="5" width="14" height="14" rx="2" />
+                    </svg>
+                  </button>
+                ) : (
+                  <button onClick={handleSend} disabled={!input.trim() || sending}
+                    className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center transition-all disabled:opacity-30 hover:opacity-90 cursor-pointer disabled:cursor-default"
+                    style={{ background: 'linear-gradient(135deg, #3b82f6, #6366f1)' }}>
+                    <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                    </svg>
+                  </button>
+                )}
               </div>
 
-              {/* Recording indicator */}
               {isRecording && (
                 <div className="px-3 pb-2 flex items-center gap-1.5">
                   <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
@@ -671,7 +759,6 @@ export default function ChatPage() {
               )}
             </div>
 
-            {/* Hidden file input */}
             <input
               ref={fileInputRef}
               type="file"
@@ -682,7 +769,7 @@ export default function ChatPage() {
             />
 
             <p className="text-[9px] font-mono text-gray-800 text-center mt-1.5">
-              policy engine · audit log · governed inference
+              policy engine · streaming inference · audit log
               {attachments.length > 0 && <span className="text-blue-900"> · {attachments.length} file{attachments.length > 1 ? 's' : ''} queued</span>}
             </p>
           </div>

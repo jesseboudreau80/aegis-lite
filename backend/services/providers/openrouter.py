@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from typing import AsyncGenerator
 
 from config.model_costs import MODEL_INFO
 from config.settings import settings
@@ -64,3 +65,37 @@ async def call_openrouter(
         if "429" in err_str:
             return "[Rate limit reached on this free model. Wait a moment or select a different model.]", 0, 0
         return _MODEL_ERROR, 0, 0
+
+
+async def stream_openrouter(
+    model: str,
+    messages: list[dict],
+    system: str | None = None,
+) -> AsyncGenerator[str, None]:
+    """Async generator that yields text tokens from OpenRouter streaming API."""
+    from openai import AsyncOpenAI
+
+    api_model = MODEL_INFO.get(model, {}).get("api_model", model)
+    client = AsyncOpenAI(
+        api_key=settings.openrouter_api_key,
+        base_url=_OPENROUTER_BASE_URL,
+        timeout=_TIMEOUT_SECONDS,
+    )
+
+    or_messages: list[dict] = []
+    if system:
+        or_messages.append({"role": "system", "content": system})
+    or_messages.extend(messages)
+
+    logger.info("OpenRouter stream: model=%s api_model=%s", model, api_model)
+
+    stream = await client.chat.completions.create(
+        model=api_model,
+        messages=or_messages,
+        max_tokens=4096,
+        stream=True,
+    )
+
+    async for chunk in stream:
+        if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
+            yield chunk.choices[0].delta.content

@@ -141,6 +141,9 @@ export const api = {
   getGovernanceActivity: (params?: { limit?: number; since?: string }) =>
     _client.get('/governance/activity', { params }),
 
+  // Streaming chat — use fetch directly, not axios (SSE)
+  chatStreamUrl: '/api/chat/stream',
+
   // Health & Status (public — no auth required)
   health:         () => _client.get('/health'),
   getStatus:      () => _client.get('/status'),

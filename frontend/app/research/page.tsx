@@ -159,17 +159,34 @@ export default function ResearchPage() {
           {/* Results */}
           {result && (
             <div className="space-y-4">
+              {/* Demo mode notice */}
+              {result.content.includes('Demo Mode') && (
+                <div className="rounded-xl border border-amber-500/20 p-4 flex items-start gap-3"
+                  style={{ background: 'rgba(245,158,11,0.06)' }}>
+                  <svg className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                  </svg>
+                  <div>
+                    <p className="text-xs text-amber-400 font-semibold mb-0.5">Research provider not configured</p>
+                    <p className="text-[11px] text-amber-600 leading-relaxed">
+                      Add <code className="bg-amber-900/30 px-1 rounded font-mono">PERPLEXITY_API_KEY</code> to <code className="bg-amber-900/30 px-1 rounded font-mono">backend/.env</code> to enable live web-grounded research with citations.
+                    </p>
+                  </div>
+                </div>
+              )}
               <div className="rounded-xl border border-white/[0.06] p-6"
                 style={{ background: 'var(--surface-2)' }}>
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-xs font-semibold text-white uppercase tracking-wider">Research Results</h2>
                   <div className="flex items-center gap-2 text-[10px] text-gray-600">
                     <div className="flex items-center gap-1.5">
-                      <div className="w-1 h-1 rounded-full bg-emerald-600" />
-                      Governed inference
+                      <div className={`w-1 h-1 rounded-full ${result.content.includes('Demo Mode') ? 'bg-amber-600' : 'bg-emerald-600'}`} />
+                      {result.content.includes('Demo Mode') ? 'Demo mode' : 'Governed inference'}
                     </div>
-                    <span className="text-gray-700">·</span>
-                    <span>${result.cost_usd.toFixed(6)}</span>
+                    {!result.content.includes('Demo Mode') && (
+                      <><span className="text-gray-700">·</span>
+                      <span>${result.cost_usd.toFixed(6)}</span></>
+                    )}
                   </div>
                 </div>
                 <div className="text-sm text-gray-300 prose-chat whitespace-pre-wrap leading-relaxed">

@@ -4,33 +4,67 @@
 
 # Aegis Lite
 
-**Open-source AI governance and orchestration workspace.**
+**Open-source AI governance layer for enterprise teams.**
 
-Policy enforcement · Audit logging · Multi-model routing · Self-hostable
+Policy-before-inference · Real-time audit logging · Multi-provider routing · Self-hostable
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-3b82f6?style=flat-square)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3b82f6?style=flat-square&logo=python&logoColor=white)](https://python.org)
 [![Next.js 15](https://img.shields.io/badge/Next.js-15-black?style=flat-square&logo=nextdotjs)](https://nextjs.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
-[![Docker](https://img.shields.io/badge/Docker-ready-2496ED?style=flat-square&logo=docker&logoColor=white)](docker-compose.yml)
-[![CI](https://img.shields.io/github/actions/workflow/status/jesseboudreau80/aegis-lite/backend-tests.yml?branch=main&style=flat-square&label=CI)](https://github.com/jesseboudreau80/aegis-lite/actions)
 [![Issues](https://img.shields.io/github/issues/jesseboudreau80/aegis-lite?style=flat-square&color=7057ff)](https://github.com/jesseboudreau80/aegis-lite/issues)
 
-[**Live Demo**](https://aegis-lite.jesseboudreau.com) · [**Setup Guide**](docs/SETUP.md) · [**Architecture**](docs/ARCHITECTURE.md) · [**Policy Engine**](docs/POLICY_ENGINE.md) · [**Roadmap**](docs/ROADMAP.md)
+[**Live Demo**](https://aegis-lite.jesseboudreau.com) · [**Quick Start**](#quick-start) · [**Architecture**](#architecture) · [**Policy Engine**](#policy-engine) · [**Roadmap**](#roadmap)
 
 </div>
 
 ---
 
-Aegis Lite gives teams a production-grade platform to govern AI usage in their organization — with a **deterministic policy engine** that evaluates every request through 10 ordered rule checks before a single token reaches any model.
+## Why Aegis Lite exists
+
+Most AI deployments have no governance layer. Teams connect employees directly to LLMs with no visibility into what's being sent, no enforcement of data policies, and no audit trail.
+
+**Aegis Lite sits between your users and your AI providers** — evaluating every request through a deterministic policy engine before a single token reaches any model. It's not a wrapper. It's a control plane.
 
 ```
-User prompt → [Policy Engine] → [AI Router] → [Provider] → [Response scan] → User
-                    ↓                  ↓
-             GovernanceEvent      AuditLog
-             (rule trace,         (model, cost,
-              risk score,          tokens, policy
-              policy version)      decision)
+User prompt
+    │
+    ▼
+┌─────────────────────────────────────────────────┐
+│  Aegis Lite Policy Engine                        │
+│                                                  │
+│  1. Rate limit check                             │
+│  2. Model access control (role-based)            │
+│  3. Agent permission enforcement                 │
+│  4. Data classification (public/internal/conf.)  │
+│  5. PII detection + redaction                    │
+│  6. Prompt injection scan                        │
+│  7. Keyword blocklist                            │
+│  8. Research provider restrictions               │
+│  9. Tool grant verification                      │
+│  10. Risk score threshold enforcement            │
+└─────────────┬───────────────────────────────────┘
+              │ allow / warn / modify / escalate / block
+              ▼
+        ┌─────────────┐
+        │  AI Router  │  ← budget-aware, multi-provider
+        └──────┬──────┘
+               │
+    ┌──────────┴──────────┐
+    │                     │
+OpenRouter              Perplexity
+(Llama, GPT OSS,       (web-grounded
+ Gemma — free)          research)
+    │                     │
+    └──────────┬──────────┘
+               │
+    ┌──────────┴──────────┐
+    │    Response scan     │  ← post-inference policy check
+    └──────────┬──────────┘
+               │
+    ┌──────────┴──────────┐
+    │  Immutable AuditLog  │  ← cost, tokens, decision, trace
+    └─────────────────────┘
 ```
 
 ---
@@ -38,238 +72,264 @@ User prompt → [Policy Engine] → [AI Router] → [Provider] → [Response sca
 ## What's included
 
 | Feature | Description | Status |
-|---------|-------------|--------|
-| **Deterministic policy engine** | PII redaction, secrets scanning, injection defense, data classification — 10 rule chain | ✅ Phase 1 |
-| **Multi-model routing** | Anthropic, OpenAI, OpenRouter (Mistral/Llama/Gemini), Perplexity with budget-aware fallback | ✅ |
-| **Immutable audit log** | Every request logged with rule trace, risk score, and policy version | ✅ |
-| **RBAC + budget controls** | Per-role model access, per-user monthly spend limits | ✅ |
-| **Governance dashboard** | Policy decisions, risk analytics, audit explorer | ✅ |
-| **Agent framework** | Create and run governed agents with model allowlists and spend limits | ✅ |
-| **Research integration** | Perplexity-powered research with outbound data classification | ✅ |
-| **AI System Registry** | Register, classify, and govern AI systems in your organization | ✅ |
-| **Training gate** | Require users to complete governance training before AI access | ✅ |
-| **Public status API** | `/status` endpoint with safe system metrics and demo mode | ✅ |
-| **Demo mode** | `DEMO_MODE=true` for public showcase deployments | ✅ |
+|---|---|---|
+| **Policy Engine** | 10-rule deterministic chain. Zero LLM calls inside evaluation. | ✅ |
+| **Governed Chat** | Streaming inference with real-time governance trace | ✅ |
+| **Governed Agents** | Pre-built agents with model allowlists, budget limits, audit logs | ✅ |
+| **Governed Research** | Web-grounded research (Perplexity) with pre-dispatch classification | ✅ |
+| **Multi-provider Routing** | OpenRouter (free), Anthropic, OpenAI, Perplexity — budget-aware fallback | ✅ |
+| **Audit Log** | Every request: model, cost, tokens, policy decision, risk score | ✅ |
+| **Live Activity Feed** | SSE-based real-time governance event stream | ✅ |
+| **Usage Ledger** | Per-user cost tracking, monthly budgets, admin override | ✅ |
+| **AI System Registry** | Register AI systems with department, risk level, model policy | ✅ |
+| **Multimodal Input** | Voice transcription + file attachments (governance-evaluated) | ✅ |
+| **Onboarding Flow** | Sequential workspace orientation guide | ✅ |
+| **Early Access Capture** | Waitlist email collection | ✅ |
 
 ---
 
-## Policy Engine
+## Quick Start
 
-The policy engine is the core OSS differentiator. It evaluates **every** request **before** dispatch through 10 deterministic rules — no LLM calls inside the engine.
+### Prerequisites
+- Python 3.11+
+- Node.js 18+
+- An [OpenRouter](https://openrouter.ai) API key (free tier available)
 
-```
-Request received
-    │
-    ├─ 1. Secrets detection     → BLOCK  if API keys, credentials, private keys
-    ├─ 2. Model access control  → OVERRIDE or BLOCK based on role + dept
-    ├─ 3. Agent permissions     → OVERRIDE model to agent's allowlist
-    ├─ 4. Data classification   → AUTO-DETECT Public/Internal/Confidential/Restricted
-    ├─ 5. PII detection         → REDACT emails, phones, SSNs, credit cards
-    ├─ 6. Prompt injection      → ESCALATE on 21 jailbreak patterns (risk-scored)
-    ├─ 7. Sensitive keywords    → WARN on restricted/confidential keywords
-    ├─ 8. Research outbound     → BLOCK classified data to external search APIs
-    ├─ 9. Tool grant check      → DENY unauthorized tool invocations
-    └─ 10. Risk behavior        → INJECT governance notice, set audit level
-         │
-         ▼
-    PolicyDecision { decision, risk_score, flags, rule_trace, policy_version }
-         │
-         ├─ allow    → dispatch to provider
-         ├─ modify   → dispatch with redacted prompt
-         ├─ warn     → dispatch + flag in governance log
-         ├─ escalate → dispatch + human review notification
-         └─ block    → HTTP 403, GovernanceEvent logged
-```
-
-**Risk scoring:** Each rule that fires adds a delta to a cumulative risk score (0.0–1.0). Thresholds: warn ≥ 0.25 · escalate ≥ 0.60 · block ≥ 0.85. Force-block flags override thresholds immediately.
-
-See [docs/POLICY_ENGINE.md](docs/POLICY_ENGINE.md) for the full rule taxonomy and extension guide.
-
----
-
-## Quickstart
-
-### Docker (recommended)
+### 1. Clone and configure
 
 ```bash
 git clone https://github.com/jesseboudreau80/aegis-lite.git
 cd aegis-lite
-cp .env.example .env          # edit: set SECRET_KEY + one AI provider key
-docker compose up
+
+# Backend
+cp backend/.env.example backend/.env
+# Edit backend/.env and add your OPENROUTER_API_KEY
+# Generate SECRET_KEY: openssl rand -hex 32
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Sign in with `admin@example.com`.
-
-> **Zero-config demo:** without any API keys, all models run in demo mode with simulated responses.
-
-### Local development
+### 2. Install dependencies
 
 ```bash
 # Backend
 cd backend
-python3 -m venv .venv && source .venv/bin/activate
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
-cp ../.env.example .env && nano .env    # set LOCAL_DEV=true + SECRET_KEY
-uvicorn main:app --reload --port 8100
 
-# Frontend (new terminal)
-cd frontend && npm install && npm run dev
+# Frontend
+cd ../frontend
+npm install
 ```
 
----
+### 3. Start the development servers
 
-## Configuration
+```bash
+# Backend (in backend/)
+uvicorn main:app --reload --port 8107
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `SECRET_KEY` | — | 32+ char random string. Generate: `openssl rand -hex 32` |
-| `ANTHROPIC_API_KEY` | — | Claude Opus + Sonnet models |
-| `OPENAI_API_KEY` | — | GPT-4o + GPT-4o Mini models |
-| `OPENROUTER_API_KEY` | — | Mistral, Llama, Gemini (includes free-tier models) |
-| `PERPLEXITY_API_KEY` | — | Research page (web-grounded queries) |
-| `DATABASE_URL` | `sqlite+aiosqlite:///./aegis_lite.db` | PostgreSQL for production |
-| `DEMO_MODE` | `false` | Enable seeded public-safe demo data |
-| `LOCAL_DEV` | `false` | Allow weak secrets in development |
-| `AEGIS_EDITION` | `lite` | Edition identifier |
+# Frontend (in frontend/)
+API_URL=http://127.0.0.1:8107 npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000).
+
+**Demo credentials:**
+- Admin: `admin@example.com` / `demo`
+- User: `demo@example.com` / `demo`
+
+### Using the start script (production)
+
+```bash
+# Start both services
+./start.sh
+
+# Stop
+./stop.sh
+```
 
 ---
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    Next.js 15 Frontend                           │
-│  ┌─────────┐ ┌────────┐ ┌──────────┐ ┌────────────┐ ┌───────┐  │
-│  │  Chat   │ │ Agents │ │ Research │ │ Governance │ │ Audit │  │
-│  └────┬────┘ └────┬───┘ └────┬─────┘ └─────┬──────┘ └───┬───┘  │
-└───────┼───────────┼──────────┼─────────────┼────────────┼───────┘
-        │           │  /api proxy (JWT)       │            │
-┌───────▼───────────▼──────────▼─────────────▼────────────▼───────┐
-│                      FastAPI Backend                              │
-│                                                                   │
-│  ┌────────────────────────────────────────────────────────────┐  │
-│  │                    Policy Engine (Phase 1)                  │  │
-│  │  Secrets → Model Access → Classification → PII → Injection  │  │
-│  │  → Keywords → Research → Tools → Risk Controls             │  │
-│  └────────────────────┬───────────────────────────────────────┘  │
-│                        │ PolicyDecision                           │
-│  ┌─────────────────────▼──────────────────────────┐             │
-│  │              AI Router + Routing Engine         │             │
-│  │  Budget-aware routing · Provider selection      │             │
-│  │  Model fallback · Cost tracking                 │             │
-│  └─────────────┬────────────┬──────────┬───────────┘             │
-│                │            │          │                          │
-│  ┌─────────────▼──┐ ┌───────▼───┐ ┌───▼────────┐               │
-│  │  Anthropic     │ │  OpenAI   │ │ OpenRouter │               │
-│  │  Claude Opus   │ │  GPT-4o   │ │ Mistral    │               │
-│  │  Claude Sonnet │ │  GPT-mini │ │ Llama 3.1  │               │
-│  └────────────────┘ └───────────┘ │ Gemini     │               │
-│                                    │ Perplexity │               │
-│                                    └────────────┘               │
-│                                                                   │
-│  ┌────────────────────────────────────────────────────────────┐  │
-│  │                    Audit + Governance Layer                  │  │
-│  │  AuditLog (every request) · GovernanceEvent (policy)        │  │
-│  │  RateLimitEntry · User · Agent · AISystem · ResearchSession │  │
-│  └───────────────────────────┬────────────────────────────────┘  │
-└──────────────────────────────┼────────────────────────────────────┘
-                               │
-              ┌────────────────▼────────────────┐
-              │   SQLite (dev) / PostgreSQL (prod)│
-              └─────────────────────────────────-┘
+aegis-lite/
+├── backend/
+│   ├── main.py                    # FastAPI app, lifespan, CORS, JWT middleware
+│   ├── models.py                  # SQLAlchemy ORM: User, AuditLog, GovernanceEvent, ...
+│   ├── config/
+│   │   ├── policy_config.py       # Rule thresholds, data tiers, model allowlists
+│   │   ├── model_registry.py      # Single source of truth for all model metadata
+│   │   └── settings.py            # Pydantic settings (reads from .env)
+│   ├── services/
+│   │   ├── policy_engine.py       # 10-rule deterministic evaluation chain
+│   │   ├── ai_router.py           # Provider dispatch with policy integration
+│   │   ├── routing_engine.py      # Budget-aware model selection
+│   │   ├── cost_engine.py         # Per-token cost tracking
+│   │   ├── trace_builder.py       # Execution trace for governance UI
+│   │   └── providers/
+│   │       ├── openrouter.py      # OpenRouter (streaming + non-streaming)
+│   │       └── perplexity.py      # Perplexity (web-grounded research)
+│   └── routes/
+│       ├── chat.py                # POST /chat, POST /chat/stream (SSE)
+│       ├── governance.py          # Activity feed, SSE stream, audit explorer
+│       ├── research.py            # Web research with policy enforcement
+│       ├── agents.py              # Agent CRUD + governed execution
+│       └── ...
+└── frontend/
+    ├── app/
+    │   ├── chat/page.tsx          # Streaming governed chat with multimodal input
+    │   ├── dashboard/page.tsx     # Live governance control plane
+    │   ├── governance/            # Audit, policies, AI registry
+    │   └── ...
+    └── components/
+        ├── OnboardingGuide.tsx    # Sequential workspace orientation
+        └── ...
 ```
 
 ---
 
-## API Surface
+## Policy Engine
 
-The backend exposes a documented API at `http://localhost:8100/docs`.
+The policy engine is **deterministic** — no LLM calls, no probabilistic decisions. Every request is evaluated through 10 ordered rule checks:
 
-Key public endpoints (no auth):
+| # | Rule | Triggers |
+|---|---|---|
+| 1 | **Rate limit** | Per-user, per-model daily cap exceeded |
+| 2 | **Model access** | Role-based model allowlist enforcement |
+| 3 | **Agent permissions** | Agent model allowlist verification |
+| 4 | **Data classification** | Content tier mismatch with provider policy |
+| 5 | **PII detection** | SSN, credit card, email patterns in prompt |
+| 6 | **Prompt injection** | Jailbreak, override, system prompt attacks |
+| 7 | **Keyword blocklist** | Configurable topic restrictions |
+| 8 | **Research restrictions** | Classification-based external dispatch blocking |
+| 9 | **Tool grants** | Capability verification for agent tools |
+| 10 | **Risk controls** | Cumulative risk score threshold (block ≥ 0.85) |
 
-```
-GET  /health           → liveness probe
-GET  /status           → public system status + governance metrics
-GET  /status/demo-events → synthetic governance event stream
-GET  /models           → available AI models
-```
+**Risk scoring:** 0.0–1.0 cumulative. `warn ≥ 0.25` · `escalate ≥ 0.60` · `block ≥ 0.85`
 
-Key authenticated endpoints:
+**Policy decisions:** `allow` → `warn` → `modify` → `escalate` → `block`
 
-```
-POST /auth/login       → password login → JWT
-POST /auth/magic-link  → magic-link request
-GET  /auth/me          → validate JWT, return user
-POST /chat             → governed AI chat
-GET  /usage            → per-user cost + token tracking
-GET  /governance/summary → policy decision aggregates (admin)
-GET  /governance/audit   → paginated audit explorer (admin)
-```
+Every decision is logged to `GovernanceEvent` with the full rule trace, risk score, and policy version.
 
 ---
 
-## What's not included (Enterprise)
+## Streaming Inference
 
-| Feature | Lite | Enterprise |
-|---------|------|-----------|
-| SOC 2 control mapping + evidence | — | ✅ |
-| Infrastructure ecosystem registry | — | ✅ |
-| Governed action approval workflows | — | ✅ |
-| Operator mode + runtime control | — | ✅ |
-| Workspace continuity engine | — | ✅ |
-| Webhook / Slack notifications | — | ✅ |
-| Kubernetes deployment manifests | — | ✅ |
-| Multi-tenant isolation | — | ✅ |
+Chat responses stream token-by-token via SSE. The governance metadata is emitted before inference begins:
+
+```
+POST /chat/stream
+
+→  data: {"type":"meta","policy_decision":"allow","execution_trace":[...]}
+→  data: {"type":"token","content":"Hello"}
+→  data: {"type":"token","content":" there"}
+→  ...
+→  data: {"type":"done","message_id":"...","cost_info":{...},"execution_trace":[...]}
+```
+
+The frontend renders tokens incrementally with a typing cursor, showing live governance telemetry alongside the response.
 
 ---
 
-## Screenshots
+## Environment Variables
 
-> 📸 Screenshots of the live deployment at [aegis-lite.jesseboudreau.com](https://aegis-lite.jesseboudreau.com)
+See [`backend/.env.example`](backend/.env.example) for the full reference.
 
-| Landing page | Governance dashboard |
+**Minimum required for real inference:**
+
+```bash
+SECRET_KEY=<openssl rand -hex 32>
+OPENROUTER_API_KEY=<your key>    # free tier at openrouter.ai
+```
+
+**Optional providers:**
+
+```bash
+ANTHROPIC_API_KEY=               # Claude Sonnet / Opus
+OPENAI_API_KEY=                  # GPT-4o / GPT-4o Mini
+PERPLEXITY_API_KEY=              # Web-grounded research
+```
+
+When a key is not configured, Aegis falls back to free-tier OpenRouter models. No functionality is broken — only the specific provider is unavailable.
+
+---
+
+## API Reference
+
+| Endpoint | Auth | Description |
+|---|---|---|
+| `POST /auth/login` | — | Password login, returns JWT |
+| `POST /auth/magic-link` | — | Email magic link |
+| `POST /chat` | JWT | Governed inference (blocking) |
+| `POST /chat/stream` | JWT | Governed inference (SSE streaming) |
+| `POST /research` | JWT | Web-grounded research |
+| `GET /governance/activity` | JWT | Real-time activity feed |
+| `GET /governance/stream` | `?token=` | SSE governance event stream |
+| `GET /governance/audit` | Admin | Audit log explorer |
+| `GET /status` | — | Public system status |
+| `GET /health` | — | Liveness probe |
+
+---
+
+## Governance Philosophy
+
+**Policy before inference.** Every AI request passes through the governance engine before any data leaves your infrastructure. The engine is deterministic — you can read the code and understand exactly what will be blocked.
+
+**Immutable audit trail.** Every request creates an `AuditLog` record. These records cannot be modified. The governance control plane shows real data from real requests.
+
+**Provider abstraction.** Users select "Governed Free Model" — not Llama or GPT. The infrastructure layer manages provider selection, fallback, and routing. This makes provider switching transparent.
+
+**Self-hosted first.** Aegis Lite runs entirely on your infrastructure. No data leaves your environment unless you explicitly route to external AI providers. When external providers are used, Aegis enforces data classification rules before dispatch.
+
+---
+
+## Roadmap
+
+| Feature | Status |
 |---|---|
-| *Policy engine visualizer + live status panel* | *Metric cards + event stream + flag analytics* |
-
-| Audit explorer | Chat interface |
-|---|---|
-| *Decision filter chips + split detail panel* | *Model selector + routing info + execution trace* |
+| Streaming governed inference | ✅ Shipped |
+| File attachment governance | ✅ Shipped |
+| Voice input (transcription) | ✅ Shipped |
+| Live SSE governance feed | ✅ Shipped |
+| Policy engine test suite | 🚧 In progress |
+| Docker Compose production setup | 🚧 In progress |
+| Agent orchestration (multi-step) | 📋 Planned |
+| Governed vector search / RAG | 📋 Planned |
+| Image/document OCR governance | 📋 Planned |
+| SCIM provisioning | 📋 Planned |
+| SAML/OIDC SSO | 📋 Planned |
+| Webhook governance events | 📋 Planned |
 
 ---
 
 ## Contributing
 
-Aegis Lite is built for the community. The highest-value contribution areas:
+Issues, pull requests, and feedback are welcome.
 
-| Area | Entry points |
-|------|-------------|
-| **Policy rules** | `backend/config/policy_config.py` + `backend/services/policy_engine.py` |
-| **Tests** | `backend/tests/` — issue [#1 (policy engine)](https://github.com/jesseboudreau80/aegis-lite/issues/1), [#10 (AI router)](https://github.com/jesseboudreau80/aegis-lite/issues/10) |
-| **Frontend** | Governance dashboard, audit explorer, mobile layouts |
-| **Providers** | New AI provider adapters — issue [#11](https://github.com/jesseboudreau80/aegis-lite/issues/11) |
-| **Docs** | Deployment guides, `AGENT_SYSTEM.md` — issue [#5](https://github.com/jesseboudreau80/aegis-lite/issues/5), [#8](https://github.com/jesseboudreau80/aegis-lite/issues/8) |
+```bash
+# Run backend tests
+cd backend
+pytest tests/ -v
 
-See [**CONTRIBUTING.md**](CONTRIBUTING.md) for setup instructions and PR guidelines.
-See [**good-first-issues**](https://github.com/jesseboudreau80/aegis-lite/labels/good-first-issue) for scoped, actionable work.
+# Format
+ruff format .
+ruff check .
+```
 
----
-
-## Security
-
-See [SECURITY.md](SECURITY.md) for the vulnerability disclosure process and production hardening checklist.
-
-**Quick production checklist:**
-- [ ] `SECRET_KEY` generated with `openssl rand -hex 32`
-- [ ] `LOCAL_DEV=false` (default)
-- [ ] PostgreSQL database
-- [ ] Reverse proxy with HTTPS
-- [ ] `CORS_ORIGINS` restricted to your domain
-- [ ] `.env` not committed to version control
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ---
 
 ## License
 
-Apache License 2.0 — see [LICENSE](LICENSE).
+Apache 2.0 — see [LICENSE](LICENSE).
 
-Built with [FastAPI](https://fastapi.tiangolo.com) · [Next.js](https://nextjs.org) · [SQLAlchemy](https://sqlalchemy.org) · [Tailwind CSS](https://tailwindcss.com)
+---
+
+<div align="center">
+
+Built by [Jesse Boudreau](https://github.com/jesseboudreau80) · Extracted from the enterprise Aegis AI governance platform
+
+[Live Demo](https://aegis-lite.jesseboudreau.com) · [Issues](https://github.com/jesseboudreau80/aegis-lite/issues) · [Discussions](https://github.com/jesseboudreau80/aegis-lite/discussions)
+
+</div>
