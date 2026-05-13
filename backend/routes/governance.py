@@ -1,23 +1,28 @@
 """
 Governance Dashboard API.
 
-GET /governance/summary   — aggregate policy metrics
-GET /governance/events    — filtered, paginated governance event log
-GET /governance/audit     — audit explorer (paginated)
-GET /governance/audit/{id} — single event detail
+GET /governance/summary      — aggregate policy metrics
+GET /governance/events       — filtered, paginated governance event log
+GET /governance/audit        — audit explorer (paginated)
+GET /governance/audit/{id}   — single event detail
+GET /governance/activity     — real-time activity feed (any authenticated user)
+GET /governance/stream       — SSE push stream of governance events
 """
+import asyncio
+import json
 import logging
 from collections import Counter
 from datetime import datetime, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from database import get_db
+from database import get_db, AsyncSessionLocal
 from models import AuditLog, GovernanceEvent, User
-from routes.auth import require_admin
+from routes.auth import get_current_user, require_admin
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/governance", tags=["governance"])
@@ -222,3 +227,156 @@ async def policy_engine_health(_: User = Depends(require_admin)):
         return {"status": "ok", "policy_version": POLICY_VERSION, "engine_decision": decision.decision}
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"Policy engine error: {exc}")
+
+
+# ── Real-time governance activity feed ────────────────────────────────────────
+
+
+def _format_audit_event(log: AuditLog, actor_email: str) -> dict:
+    """Convert an AuditLog row into a standardised activity event."""
+    decision  = log.policy_decision or "allow"
+    tok       = (log.estimated_input_tokens or 0) + (log.estimated_output_tokens or 0)
+    cost      = round(log.estimated_cost or 0, 8)
+    request_id = log.id[:8]
+    runtime   = log.model or "unknown"
+
+    severity_map = {
+        "allow":    "info",
+        "modify":   "info",
+        "warn":     "warning",
+        "escalate": "warning",
+        "block":    "critical",
+    }
+
+    return {
+        "id":           log.id,
+        "request_id":   request_id,
+        "timestamp":    log.timestamp.isoformat() + "Z",
+        "actor":        actor_email,
+        "decision":     decision,
+        "runtime":      runtime,
+        "cost_usd":     cost,
+        "token_count":  tok,
+        "tokens_in":    log.estimated_input_tokens,
+        "tokens_out":   log.estimated_output_tokens,
+        "event_type":   log.event_type or "chat",
+        "status":       log.status,
+        "severity":     severity_map.get(decision, "info"),
+    }
+
+
+@router.get("/activity")
+async def get_governance_activity(
+    limit: int = Query(20, ge=1, le=50),
+    since: Optional[str] = Query(None, description="ISO timestamp — return only events after this time"),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Real-time governance activity feed.
+
+    Available to any authenticated user. Admins see all workspace activity;
+    regular users see their own activity only.
+    """
+    q = (
+        select(AuditLog, User.email)
+        .join(User, User.id == AuditLog.user_id, isouter=True)
+        .order_by(AuditLog.timestamp.desc())
+    )
+
+    if user.role != "admin":
+        q = q.where(AuditLog.user_id == user.id)
+
+    if since:
+        try:
+            since_dt = datetime.fromisoformat(since.rstrip("Z"))
+            q = q.where(AuditLog.timestamp > since_dt)
+        except ValueError:
+            pass
+
+    rows = (await db.execute(q.limit(limit))).all()
+
+    events = [_format_audit_event(log, email or "unknown") for log, email in rows]
+
+    return {
+        "events": events,
+        "count":  len(events),
+        "real":   True,
+    }
+
+
+@router.get("/stream")
+async def governance_stream(
+    token: str = Query(..., description="JWT — required because EventSource cannot set headers"),
+    db: AsyncSession = Depends(get_db),
+):
+    """SSE push stream of real governance events.
+
+    Accepts JWT via ?token= query param because the browser EventSource API
+    cannot set Authorization headers. Poll interval: 4 seconds. Keepalive: 8s.
+    """
+    from services.auth_service import decode_access_token
+
+    payload = decode_access_token(token)
+    if not payload:
+        async def _unauth():
+            yield 'data: {"error":"unauthorized"}\n\n'
+        return StreamingResponse(_unauth(), media_type="text/event-stream")
+
+    email = payload.get("sub")
+    user_result = await db.execute(select(User).where(User.email == email, User.is_active == True))  # noqa
+    stream_user = user_result.scalar_one_or_none()
+    if not stream_user:
+        async def _nouser():
+            yield 'data: {"error":"user_not_found"}\n\n'
+        return StreamingResponse(_nouser(), media_type="text/event-stream")
+
+    is_admin     = stream_user.role == "admin"
+    user_id      = stream_user.id
+    last_ts      = datetime.utcnow()
+    keepalive_n  = 0
+
+    async def _event_stream():
+        nonlocal last_ts, keepalive_n
+        while True:
+            try:
+                async with AsyncSessionLocal() as session:
+                    q = (
+                        select(AuditLog, User.email)
+                        .join(User, User.id == AuditLog.user_id, isouter=True)
+                        .where(AuditLog.timestamp > last_ts)
+                        .order_by(AuditLog.timestamp.asc())
+                        .limit(10)
+                    )
+                    if not is_admin:
+                        q = q.where(AuditLog.user_id == user_id)
+                    rows = (await session.execute(q)).all()
+
+                if rows:
+                    for log, actor_email in rows:
+                        last_ts = log.timestamp
+                        event_data = _format_audit_event(log, actor_email or "unknown")
+                        yield f"data: {json.dumps(event_data)}\n\n"
+                    keepalive_n = 0
+                else:
+                    keepalive_n += 1
+                    if keepalive_n >= 2:
+                        yield ": keepalive\n\n"
+                        keepalive_n = 0
+
+                await asyncio.sleep(4)
+
+            except asyncio.CancelledError:
+                break
+            except Exception:
+                logger.exception("Governance stream error — sleeping 5s")
+                await asyncio.sleep(5)
+
+    return StreamingResponse(
+        _event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control":   "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection":       "keep-alive",
+        },
+    )

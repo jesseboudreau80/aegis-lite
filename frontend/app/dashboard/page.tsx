@@ -75,7 +75,7 @@ function GovernanceHealthBar({ components }: { components: StatusComponent[] }) 
   )
 }
 
-// ── Policy activity feed ───────────────────────────────────────────────────────
+// ── Policy activity feed — real governance data ────────────────────────────────
 interface ActivityEvent {
   id: string
   time: string
@@ -84,110 +84,123 @@ interface ActivityEvent {
   isNew?: boolean
 }
 
-function shortId() { return Math.random().toString(36).slice(2, 8) }
-function riskScore() { return (Math.random() * 0.4).toFixed(2) }
-function tokenCount() { return (Math.floor(Math.random() * 400) + 60).toString() }
-
-function syntheticPool(): Omit<ActivityEvent, 'id' | 'time'>[] {
-  const r1 = shortId(), r2 = shortId(), r3 = shortId()
-  return [
-    { type: 'pass',  message: `req-${r1} · classified: Internal · 10 rules applied` },
-    { type: 'pass',  message: `req-${r2} · secrets scan: 0 credentials detected` },
-    { type: 'pass',  message: `req-${r1} · PII scan: no redactions required` },
-    { type: 'pass',  message: `req-${r3} · injection scan: cleared · risk ${riskScore()}` },
-    { type: 'info',  message: `policy engine v1.1.0 evaluated — phase-1 deterministic` },
-    { type: 'pass',  message: `req-${r2} · classification: Public · all runtimes eligible` },
-    { type: 'pass',  message: `req-${r1} · rate limit check: within daily threshold` },
-    { type: 'info',  message: `budget-aware routing: free-tier runtime selected` },
-    { type: 'info',  message: `req-${r3} · dispatch → OpenRouter governed inference` },
-    { type: 'warn',  message: `req-${r2} · PII: email address redacted before dispatch` },
-    { type: 'info',  message: `req-${r1} · runtime: governed free-tier · ${tokenCount()} tokens` },
-    { type: 'audit', message: `req-${r2} · audit record written · cost $0.00000${Math.floor(Math.random()*9)+1}` },
-    { type: 'pass',  message: `req-${r3} · policy decision: allow · risk ${riskScore()}` },
-    { type: 'warn',  message: `req-${r1} · sensitive keyword flagged · governance notice logged` },
-    { type: 'info',  message: `workspace budget enforced · ${Math.floor(Math.random()*40)+10}% utilised` },
-    { type: 'audit', message: `req-${r2} · audit log written · policy v1.1.0` },
-    { type: 'pass',  message: `req-${r3} · research classification: Public · approved for dispatch` },
-    { type: 'warn',  message: `req-${r1} · classification: Internal · premium runtime restricted` },
-    { type: 'pass',  message: `req-${r2} · agent execution: policy-checked · within budget` },
-    { type: 'info',  message: `governance mode: deterministic-phase1 · 0 LLM calls in engine` },
-  ]
+interface RealEvent {
+  id: string; request_id: string; timestamp: string; actor: string
+  decision: string; runtime: string; cost_usd: number; token_count: number
+  event_type: string; severity: string
 }
 
-type DemoAPIEvent = {
-  id: string; timestamp: string; decision: string;
-  actor_email?: string; risk_score?: number; flags?: string[]; model?: string
+function eventTimeStr(iso: string): string {
+  return new Date(iso).toLocaleTimeString('en-US', {
+    hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit',
+  })
 }
 
-function nowStr() {
-  return new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })
-}
+function realToActivity(e: RealEvent): ActivityEvent {
+  const rid = e.request_id ?? e.id.slice(0, 8)
+  const dec = e.decision
+  const tok = e.token_count
+  const cost = e.cost_usd.toFixed(tok > 0 ? 6 : 0)
 
-function apiEventToActivity(e: DemoAPIEvent): ActivityEvent {
-  const dec  = e.decision
-  const risk = (e.risk_score ?? 0).toFixed(2)
-  const rid  = e.id.slice(0, 8)
   let type: ActivityEvent['type'] = 'pass'
-  let message = `req-${rid} · policy: ${dec}`
+  let message = `req-${rid} · ${dec}`
 
-  if (dec === 'warn')     { type = 'warn';  message = `req-${rid} · policy notice: warn · risk ${risk}` }
-  if (dec === 'escalate') { type = 'warn';  message = `req-${rid} · governance escalation · risk ${risk}` }
-  if (dec === 'modify')   { type = 'info';  message = `req-${rid} · prompt modified: PII redaction applied` }
-  if (dec === 'block')    { type = 'warn';  message = `req-${rid} · blocked · risk ${risk} · ${(e.flags ?? []).slice(0,2).join(', ')}` }
-  if (dec === 'allow')    { type = 'pass';  message = `req-${rid} · policy: allow · risk ${risk} · v1.1.0` }
+  if (dec === 'allow') {
+    type = 'pass'
+    message = `req-${rid} · policy: allow · ${e.runtime} · ${tok} tok · $${cost}`
+  } else if (dec === 'warn') {
+    type = 'warn'
+    message = `req-${rid} · policy notice: warn · ${e.runtime} · v1.1.0`
+  } else if (dec === 'modify') {
+    type = 'info'
+    message = `req-${rid} · prompt modified · PII redaction applied · ${e.runtime}`
+  } else if (dec === 'escalate') {
+    type = 'warn'
+    message = `req-${rid} · governance escalation · ${e.runtime}`
+  } else if (dec === 'block') {
+    type = 'warn'
+    message = `req-${rid} · request BLOCKED · policy v1.1.0`
+  }
 
-  return { id: e.id, time: nowStr(), type, message }
+  return { id: e.id, time: eventTimeStr(e.timestamp), type, message }
 }
 
-function PolicyActivityFeed() {
-  const [events, setEvents]   = useState<ActivityEvent[]>([])
-  const [seeded, setSeeded]   = useState(false)
-  const feedRef = useRef<HTMLDivElement>(null)
+import { api as apiClient, STORAGE_KEY_JWT } from '@/lib/api'
 
-  // Seed from real demo-events endpoint
+function PolicyActivityFeed({ userRole }: { userRole: 'admin' | 'user' }) {
+  const [events, setEvents]       = useState<ActivityEvent[]>([])
+  const [loading, setLoading]     = useState(true)
+  const [streamMode, setStreamMode] = useState<'sse' | 'poll' | 'idle'>('idle')
+  const lastTimestamp             = useRef<string | null>(null)
+  const esRef                     = useRef<EventSource | null>(null)
+
+  // ── Initial seed from real activity endpoint ────────────────────────────────
   useEffect(() => {
-    axios.get('/api/status/demo-events?count=12')
+    apiClient.getGovernanceActivity({ limit: 20 })
       .then(r => {
-        const apiEvents: ActivityEvent[] = (r.data.events as DemoAPIEvent[])
-          .slice(0, 8)
-          .map(apiEventToActivity)
-        const pool = syntheticPool()
-        const extra = pool.slice(0, 4).map((s, i) => ({
-          ...s, id: `seed-${i}`, time: nowStr(),
-        }))
-        setEvents([...apiEvents, ...extra].slice(0, 12))
-        setSeeded(true)
+        const realEvents: RealEvent[] = r.data.events ?? []
+        if (realEvents.length > 0) {
+          lastTimestamp.current = realEvents[0].timestamp
+          setEvents(realEvents.map(realToActivity))
+        }
       })
-      .catch(() => {
-        const pool = syntheticPool()
-        const initial = pool.slice(0, 10).map((s, i) => ({
-          ...s, id: `init-${i}`, time: nowStr(),
-        }))
-        setEvents(initial)
-        setSeeded(true)
-      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
   }, [])
 
-  // Add synthetic events at intervals
+  // ── SSE stream subscription ─────────────────────────────────────────────────
   useEffect(() => {
-    if (!seeded) return
-    const tick = () => {
-      const pool = syntheticPool()
-      const template = pool[Math.floor(Math.random() * pool.length)]
-      setEvents(prev => [
-        { ...template, id: `live-${Date.now()}`, time: nowStr(), isNew: true },
-        ...prev.map(e => ({ ...e, isNew: false })).slice(0, 14),
-      ])
+    if (typeof window === 'undefined') return
+    const jwt = localStorage.getItem(STORAGE_KEY_JWT)
+    if (!jwt) { setStreamMode('poll'); return }
+
+    const es = new EventSource(`/api/governance/stream?token=${encodeURIComponent(jwt)}`)
+    esRef.current = es
+    setStreamMode('sse')
+
+    es.onmessage = (ev) => {
+      try {
+        const data = JSON.parse(ev.data)
+        if (data.error) { es.close(); setStreamMode('poll'); return }
+        const activity = realToActivity(data as RealEvent)
+        lastTimestamp.current = data.timestamp
+        setEvents(prev => [
+          { ...activity, isNew: true },
+          ...prev.map(e => ({ ...e, isNew: false })).slice(0, 19),
+        ])
+      } catch { /* ignore malformed events */ }
     }
-    // First tick in 8-14s, then every 8-14s
-    const delay = 8000 + Math.random() * 6000
-    const t = setTimeout(() => {
-      tick()
-      const interval = setInterval(tick, 8000 + Math.random() * 6000)
-      return () => clearInterval(interval)
-    }, delay)
-    return () => clearTimeout(t)
-  }, [seeded])
+
+    es.onerror = () => {
+      es.close()
+      esRef.current = null
+      setStreamMode('poll')
+    }
+
+    return () => { es.close(); esRef.current = null }
+  }, [])
+
+  // ── Polling fallback (when SSE unavailable) ─────────────────────────────────
+  useEffect(() => {
+    if (streamMode !== 'poll') return
+    const poll = async () => {
+      try {
+        const params: { limit: number; since?: string } = { limit: 10 }
+        if (lastTimestamp.current) params.since = lastTimestamp.current
+        const r = await apiClient.getGovernanceActivity(params)
+        const newEvents: RealEvent[] = r.data.events ?? []
+        if (newEvents.length > 0) {
+          lastTimestamp.current = newEvents[0].timestamp
+          setEvents(prev => [
+            ...newEvents.map(e => ({ ...realToActivity(e), isNew: true })),
+            ...prev.map(e => ({ ...e, isNew: false })).slice(0, 18 - newEvents.length),
+          ])
+        }
+      } catch { /* polling errors are silent */ }
+    }
+    const interval = setInterval(poll, 15000)
+    return () => clearInterval(interval)
+  }, [streamMode])
 
   const DOT: Record<string, string> = {
     pass:  'bg-emerald-500',
@@ -202,19 +215,40 @@ function PolicyActivityFeed() {
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-emerald-500 pulse-dot" />
           <span className="text-xs font-semibold text-gray-200">Policy Activity</span>
+          <span className="badge badge-info text-[9px]">Live</span>
         </div>
-        <span className="text-[9px] text-gray-700 font-mono uppercase tracking-wider">governance engine</span>
+        <div className="flex items-center gap-1.5 text-[9px] text-gray-700 font-mono">
+          {streamMode === 'sse' && (
+            <><div className="w-1 h-1 rounded-full bg-emerald-700" />
+            <span>streaming</span></>
+          )}
+          {streamMode === 'poll' && (
+            <><div className="w-1 h-1 rounded-full bg-blue-700" />
+            <span>polling · 15s</span></>
+          )}
+          {streamMode === 'idle' && <span>loading</span>}
+        </div>
       </div>
 
-      <div ref={feedRef} className="divide-y divide-white/[0.03]"
-        style={{ maxHeight: 280, overflowY: 'hidden' }}>
-        {events.length === 0 ? (
+      <div className="divide-y divide-white/[0.03]" style={{ maxHeight: 280, overflowY: 'hidden' }}>
+        {loading ? (
+          <div className="px-5 py-8 space-y-1.5">
+            {[90, 70, 80].map((w, i) => (
+              <div key={i} className="skeleton h-4" style={{ width: `${w}%` }} />
+            ))}
+          </div>
+        ) : events.length === 0 ? (
           <div className="px-5 py-8 text-center">
-            <div className="space-y-1.5">
-              {[1, 2, 3].map(i => (
-                <div key={i} className="skeleton h-4" style={{ width: `${60 + i * 10}%`, margin: '0 auto' }} />
-              ))}
+            <div className="w-8 h-8 rounded-xl flex items-center justify-center mx-auto mb-3 border border-white/[0.06]"
+              style={{ background: 'rgba(255,255,255,0.03)' }}>
+              <svg className="w-4 h-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75z" />
+              </svg>
             </div>
+            <p className="text-xs text-gray-500 font-medium mb-1">No governance activity yet</p>
+            <p className="text-[10px] text-gray-600 leading-relaxed max-w-[200px] mx-auto">
+              Send a governed request from Chat, Agents, or Research to generate real telemetry.
+            </p>
           </div>
         ) : (
           events.map((e) => (
@@ -231,7 +265,7 @@ function PolicyActivityFeed() {
 
       <div className="px-5 py-2.5 border-t border-white/[0.04] flex items-center justify-between">
         <span className="text-[9px] font-mono text-gray-800">
-          demo mode · simulated governance stream
+          real data · policy engine v1.1.0
         </span>
         {events.length > 0 && (
           <span className="text-[9px] text-gray-700">{events.length} events</span>
@@ -326,7 +360,7 @@ export default function DashboardPage() {
           <UsageDashboard isAdmin={user.role === 'admin'} />
 
           {/* Policy activity feed */}
-          <PolicyActivityFeed />
+          <PolicyActivityFeed userRole={user.role as 'admin' | 'user'} />
 
           {/* Governance nav for admins */}
           {user.role === 'admin' && (
