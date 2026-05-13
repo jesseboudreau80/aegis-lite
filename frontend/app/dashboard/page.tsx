@@ -76,8 +76,10 @@ export default function DashboardPage() {
           {/* Page header */}
           <div className="flex items-start justify-between gap-4 pt-1">
             <div>
-              <h1 className="text-base font-semibold text-white">Command Center</h1>
-              <p className="text-xs text-gray-500 mt-0.5">AI usage · governance · cost tracking</p>
+              <h1 className="text-base font-semibold text-white">Governance Workspace</h1>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Monitored AI usage · policy decisions · cost telemetry
+              </p>
             </div>
             <div className="hidden sm:block text-right">
               <p className="stat-label">Signed in as</p>
@@ -85,19 +87,19 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Quick links */}
+          {/* Quick links — governed workflow entry points */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {QUICK_LINKS.map(({ href, label, desc, icon, color }) => (
               <Link key={href} href={href}
-                className="card card-hover p-4 flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                className="card card-hover p-4 flex items-center gap-3 group">
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 transition-all group-hover:scale-105"
                   style={{ background: `${color}15`, border: `1px solid ${color}25` }}>
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke={color} strokeWidth={1.75}>
                     <path strokeLinecap="round" strokeLinejoin="round" d={icon} />
                   </svg>
                 </div>
                 <div className="min-w-0">
-                  <p className="text-xs font-semibold text-white truncate">{label}</p>
+                  <p className="text-xs font-semibold text-white truncate group-hover:text-blue-200 transition-colors">{label}</p>
                   <p className="text-[10px] text-gray-500 truncate">{desc}</p>
                 </div>
               </Link>

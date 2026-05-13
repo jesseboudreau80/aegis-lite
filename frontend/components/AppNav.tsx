@@ -1,8 +1,10 @@
 'use client'
 
 import Link from 'next/link'
+import { useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { useAuth } from '@/context/AuthContext'
+import { getOnboardingHref, ONBOARDING_EVENT } from './OnboardingGuide'
 
 const NAV = [
   {
@@ -56,17 +58,25 @@ interface Props {
 }
 
 function NavItem({
-  href, label, icon, active, currentPage, compact,
+  href, label, icon, active, currentPage, compact, onboarding,
 }: {
   href: string; label: string; icon: string
-  active: boolean; currentPage?: string; compact: boolean
+  active: boolean; currentPage?: string; compact: boolean; onboarding: boolean
 }) {
-  const base = 'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs transition-all duration-150'
+  const base = 'relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs transition-all duration-150'
+
+  const dot = onboarding && !active ? (
+    <span
+      aria-label="Suggested next step"
+      className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-blue-400 pulse-dot"
+    />
+  ) : null
 
   if (active && currentPage) {
     return (
       <span className={`${base} font-medium text-white`}
         style={{ background: 'rgba(255,255,255,0.08)', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.08)' }}>
+        {dot}
         <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={icon} />
         </svg>
@@ -79,6 +89,7 @@ function NavItem({
     <Link href={href}
       className={`${base} text-gray-500 hover:text-gray-200 hover:bg-white/[0.05] ${active ? 'text-white' : ''}`}
       style={active ? { background: 'rgba(255,255,255,0.08)' } : {}}>
+      {dot}
       <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={icon} />
       </svg>
@@ -88,9 +99,21 @@ function NavItem({
 }
 
 export default function AppNav({ currentPage, compact = false }: Props) {
-  const pathname  = usePathname()
-  const { user }  = useAuth()
-  const isAdmin   = user?.role === 'admin'
+  const pathname    = usePathname()
+  const { user }    = useAuth()
+  const isAdmin     = user?.role === 'admin'
+  const [onboardingHref, setOnboardingHref] = useState<string | null>(null)
+
+  useEffect(() => {
+    const check = () => setOnboardingHref(getOnboardingHref())
+    check()
+    window.addEventListener(ONBOARDING_EVENT, check)
+    window.addEventListener('storage', check)
+    return () => {
+      window.removeEventListener(ONBOARDING_EVENT, check)
+      window.removeEventListener('storage', check)
+    }
+  }, [])
 
   const isActive = (href: string) =>
     currentPage
@@ -101,7 +124,8 @@ export default function AppNav({ currentPage, compact = false }: Props) {
     <nav className="flex items-center gap-0.5 flex-wrap" aria-label="App navigation">
       {NAV.map(({ href, label, icon }) => (
         <NavItem key={href} href={href} label={label} icon={icon}
-          active={isActive(href)} currentPage={currentPage} compact={compact} />
+          active={isActive(href)} currentPage={currentPage} compact={compact}
+          onboarding={onboardingHref === href} />
       ))}
 
       {isAdmin && (
@@ -109,7 +133,8 @@ export default function AppNav({ currentPage, compact = false }: Props) {
           <div className="divider mx-1 hidden sm:block" style={{ height: 16 }} />
           {ADMIN_NAV.map(({ href, label, icon }) => (
             <NavItem key={href} href={href} label={label} icon={icon}
-              active={isActive(href)} currentPage={currentPage} compact={compact} />
+              active={isActive(href)} currentPage={currentPage} compact={compact}
+              onboarding={false} />
           ))}
         </>
       )}

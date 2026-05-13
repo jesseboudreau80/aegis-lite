@@ -19,7 +19,7 @@ const STEPS = [
     content: 'Every request is automatically classified as Public, Internal, Confidential, or Restricted. Higher classifications restrict which AI providers can receive the data. Never send confidential or restricted content to external web-search providers like Perplexity. The policy engine will block or escalate if it detects a classification mismatch.',
   },
   {
-    icon: '12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
+    icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
     color: '#8b5cf6',
     title: 'Budget Controls',
     content: 'Each user has a monthly AI spend limit. When budget is approached, requests are automatically routed to lower-cost or free-tier models. Premium models like Claude Opus are restricted to admin users. Admins can view and adjust per-user limits from the Dashboard.',

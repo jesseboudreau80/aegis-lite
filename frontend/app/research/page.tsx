@@ -8,9 +8,16 @@ import LogoutButton from '@/components/LogoutButton'
 import { api } from '@/lib/api'
 
 const RESEARCH_TYPES = [
-  { id: 'quick',    label: 'Quick',    desc: 'Fast web-grounded Q&A with citations' },
-  { id: 'deep',     label: 'Deep',     desc: 'Multi-source synthesis (Sonar Pro)' },
+  { id: 'quick', label: 'Quick',  desc: 'Fast web-grounded Q&A with citations' },
+  { id: 'deep',  label: 'Deep',   desc: 'Multi-source synthesis (extended search)' },
 ]
+
+type ResearchResult = {
+  content: string
+  model_used: string
+  cost_usd: number
+  citations: Array<{ url?: string; title?: string; snippet?: string }>
+}
 
 export default function ResearchPage() {
   const { user, loading } = useAuth()
@@ -18,9 +25,7 @@ export default function ResearchPage() {
   const [query, setQuery]   = useState('')
   const [type, setType]     = useState('quick')
   const [running, setRunning] = useState(false)
-  const [result, setResult] = useState<{
-    content: string; model_used: string; cost_usd: number; citations: unknown[]
-  } | null>(null)
+  const [result, setResult] = useState<ResearchResult | null>(null)
   const [error, setError]   = useState('')
 
   useEffect(() => {
@@ -36,10 +41,10 @@ export default function ResearchPage() {
     setResult(null)
     try {
       const res = await api.runResearch({ query, research_type: type })
-      setResult(res.data as { content: string; model_used: string; cost_usd: number; citations: unknown[] })
+      setResult(res.data as ResearchResult)
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-        || 'Research failed. Check PERPLEXITY_API_KEY is configured.'
+        || 'Research failed. PERPLEXITY_API_KEY may not be configured in this deployment.'
       setError(msg)
     } finally {
       setRunning(false)
@@ -49,36 +54,44 @@ export default function ResearchPage() {
   if (loading || !user) return null
 
   return (
-    <div className="flex flex-col h-full bg-gray-950">
-      <div className="flex-shrink-0 border-b border-gray-800 px-4 py-2.5 flex items-center gap-3">
-        <div className="flex items-center gap-1.5">
-          <div className="w-5 h-5 rounded bg-blue-600 flex items-center justify-center text-xs font-bold text-white">A</div>
-          <span className="text-sm font-semibold text-white hidden sm:block">Aegis Lite</span>
-        </div>
-        <div className="w-px h-4 bg-gray-800 hidden sm:block" />
+    <div className="flex flex-col h-full" style={{ background: 'var(--surface-1)' }}>
+
+      {/* Header */}
+      <div className="flex-shrink-0 border-b border-white/[0.06] px-4 py-2.5 flex items-center gap-3"
+        style={{ background: 'rgba(7,7,15,0.8)', backdropFilter: 'blur(12px)' }}>
+        <div className="logo-mark flex-shrink-0" style={{ width: 20, height: 20, fontSize: 10, borderRadius: 6 }}>A</div>
+        <span className="text-sm font-semibold text-white hidden sm:block">Aegis Lite</span>
+        <div className="divider hidden sm:block" style={{ height: 16 }} />
         <AppNav currentPage="/research" />
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6">
-        <div className="max-w-3xl mx-auto space-y-6">
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-3xl mx-auto px-6 py-8 space-y-6">
+
+          {/* Page header */}
           <div>
-            <h1 className="text-base font-semibold text-white">AI Research</h1>
-            <p className="text-xs text-gray-500 mt-0.5">Web-grounded research via Perplexity with governance enforcement</p>
+            <h1 className="text-sm font-semibold text-white">Governed AI Research</h1>
+            <p className="text-[12px] text-gray-500 mt-0.5">
+              Web-grounded research with governance and classification enforcement.
+              Confidential content is blocked from external providers before dispatch.
+            </p>
           </div>
 
+          {/* Search form */}
           <form onSubmit={handleSearch} className="space-y-3">
             <div className="flex gap-2">
               {RESEARCH_TYPES.map(t => (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => setType(t.id)}
-                  className={`px-3 py-1.5 rounded-lg text-xs transition-colors ${
-                    type === t.id ? 'bg-blue-600 text-white' : 'bg-gray-900 border border-gray-700 text-gray-400 hover:text-gray-200'
+                <button key={t.id} type="button" onClick={() => setType(t.id)}
+                  className={`px-3 py-1.5 rounded-lg text-xs transition-all cursor-pointer ${
+                    type === t.id
+                      ? 'text-white font-semibold'
+                      : 'text-gray-500 hover:text-gray-300 border border-white/[0.07] hover:border-white/[0.12]'
                   }`}
-                >
+                  style={type === t.id
+                    ? { background: 'linear-gradient(135deg, #3b82f6, #6366f1)' }
+                    : { background: 'var(--surface-2)' }}>
                   {t.label}
-                  <span className="text-[9px] ml-1 opacity-60">{t.desc}</span>
+                  <span className="text-[9px] ml-1.5 opacity-55">{t.desc}</span>
                 </button>
               ))}
             </div>
@@ -90,36 +103,72 @@ export default function ResearchPage() {
                 onChange={e => setQuery(e.target.value)}
                 placeholder="What would you like to research?"
                 required
-                className="flex-1 px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-600"
+                className="flex-1 px-3 py-2 rounded-lg text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500/40 transition-colors"
+                style={{ background: 'var(--surface-2)', border: '1px solid rgba(255,255,255,0.08)' }}
               />
               <button
                 type="submit"
                 disabled={running || !query.trim()}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-sm font-medium rounded-lg transition-colors flex-shrink-0"
+                className="px-4 py-2 text-white text-sm font-semibold rounded-lg transition-all disabled:opacity-40 hover:opacity-90 flex-shrink-0 flex items-center gap-2 cursor-pointer disabled:cursor-default"
+                style={{ background: 'linear-gradient(135deg, #3b82f6, #6366f1)' }}
               >
+                {running && (
+                  <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                )}
                 {running ? 'Researching…' : 'Research'}
               </button>
             </div>
 
-            <p className="text-[10px] text-yellow-600">
-              Research queries are classified before dispatch. Confidential and restricted content is blocked from external providers.
-            </p>
+            <div className="flex items-center gap-1.5 text-[10px] text-gray-700">
+              <svg className="w-3 h-3 text-amber-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+              </svg>
+              Queries are classified before external dispatch. Confidential and restricted content is blocked.
+            </div>
           </form>
 
+          {/* ── Empty state (before first search) ──────────────────────── */}
+          {!result && !error && !running && (
+            <div className="rounded-2xl border border-white/[0.06] p-8 text-center"
+              style={{ background: 'var(--surface-2)' }}>
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center mx-auto mb-4"
+                style={{ background: 'rgba(6,182,212,0.08)', border: '1px solid rgba(6,182,212,0.18)' }}>
+                <svg className="w-5 h-5 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+              <p className="text-sm font-semibold text-white mb-2">Policy-aware web research</p>
+              <p className="text-[12px] text-gray-500 leading-relaxed max-w-sm mx-auto">
+                Research requests are filtered through governance and data classification rules
+                before being dispatched to external search APIs. Your confidential data stays inside.
+              </p>
+            </div>
+          )}
+
+          {/* Error */}
           {error && (
-            <div className="p-4 bg-red-900/20 border border-red-700/30 rounded-xl">
+            <div className="rounded-xl border border-red-500/20 p-4"
+              style={{ background: 'rgba(239,68,68,0.06)' }}>
               <p className="text-sm text-red-400">{error}</p>
             </div>
           )}
 
+          {/* Results */}
           {result && (
             <div className="space-y-4">
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+              <div className="rounded-xl border border-white/[0.06] p-6"
+                style={{ background: 'var(--surface-2)' }}>
                 <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-sm font-semibold text-white">Research Results</h2>
-                  <div className="flex items-center gap-2 text-[10px] text-gray-500">
-                    <span>{result.model_used}</span>
-                    <span>·</span>
+                  <h2 className="text-xs font-semibold text-white uppercase tracking-wider">Research Results</h2>
+                  <div className="flex items-center gap-2 text-[10px] text-gray-600">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-1 h-1 rounded-full bg-emerald-600" />
+                      Governed inference
+                    </div>
+                    <span className="text-gray-700">·</span>
                     <span>${result.cost_usd.toFixed(6)}</span>
                   </div>
                 </div>
@@ -128,25 +177,28 @@ export default function ResearchPage() {
                 </div>
               </div>
 
-              {(result.citations as unknown[]).length > 0 && (
-                <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-                  <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
-                    Sources ({(result.citations as unknown[]).length})
+              {result.citations.length > 0 && (
+                <div className="rounded-xl border border-white/[0.06] p-4"
+                  style={{ background: 'var(--surface-2)' }}>
+                  <h3 className="text-[9px] font-semibold text-gray-600 uppercase tracking-widest mb-3">
+                    Sources ({result.citations.length})
                   </h3>
-                  <div className="space-y-2">
-                    {(result.citations as Array<{ url?: string; title?: string; snippet?: string }>).map((c, i) => (
+                  <div className="space-y-2.5">
+                    {result.citations.map((c, i) => (
                       <div key={i} className="flex items-start gap-2">
-                        <span className="text-[10px] text-gray-600 mt-0.5">[{i + 1}]</span>
-                        <div>
+                        <span className="text-[9px] text-gray-700 mt-0.5 font-mono flex-shrink-0">[{i + 1}]</span>
+                        <div className="min-w-0">
                           {c.url ? (
                             <a href={c.url} target="_blank" rel="noopener noreferrer"
-                               className="text-xs text-blue-400 hover:underline">
+                              className="text-xs text-blue-400 hover:text-blue-300 hover:underline transition-colors truncate block">
                               {c.title || c.url}
                             </a>
                           ) : (
-                            <p className="text-xs text-gray-400">{c.title || 'Source'}</p>
+                            <p className="text-xs text-gray-400 truncate">{c.title || 'Source'}</p>
                           )}
-                          {c.snippet && <p className="text-[10px] text-gray-600 mt-0.5">{c.snippet}</p>}
+                          {c.snippet && (
+                            <p className="text-[10px] text-gray-600 mt-0.5 line-clamp-2">{c.snippet}</p>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -157,6 +209,7 @@ export default function ResearchPage() {
           )}
         </div>
       </div>
+
       <LogoutButton />
     </div>
   )
