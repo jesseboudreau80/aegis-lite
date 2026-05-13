@@ -44,7 +44,7 @@ function LoginContent() {
       .then(res => {
         const { access_token, user: userInfo } = res.data as { access_token: string; user: User }
         loginWithJWT(access_token, userInfo)
-        router.replace('/dashboard')
+        // Don't explicitly redirect — the user-watcher effect handles it.
       })
       .catch(() => { setError('Magic link is invalid or expired.'); setStatus('error') })
   }, [token, loginWithJWT, router])
@@ -56,7 +56,7 @@ function LoginContent() {
       const res = await api.passwordLogin(email, password)
       const { access_token, user: u } = res.data as { access_token: string; user: User }
       loginWithJWT(access_token, u)
-      router.replace('/dashboard')
+      // Redirect handled by the user-watcher useEffect above — no explicit redirect here.
     } catch (err: unknown) {
       setError((err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || 'Login failed.')
       setStatus('error')

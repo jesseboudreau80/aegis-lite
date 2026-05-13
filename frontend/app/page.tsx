@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/context/AuthContext'
 import Link from 'next/link'
@@ -258,11 +258,141 @@ function GovernanceEvents() {
   )
 }
 
+// ── Early Access Modal ─────────────────────────────────────────────────────────
+function EarlyAccessModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const overlayRef = useRef<HTMLDivElement>(null)
+  const [email, setEmail]       = useState('')
+  const [company, setCompany]   = useState('')
+  const [status, setStatus]     = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
+  const [errMsg, setErrMsg]     = useState('')
+
+  // Close on Escape
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [open, onClose])
+
+  // Reset on re-open
+  useEffect(() => {
+    if (open) { setStatus('idle'); setErrMsg(''); setEmail(''); setCompany('') }
+  }, [open])
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setStatus('loading'); setErrMsg('')
+    try {
+      await axios.post('/api/early-access', { email: email.trim(), company: company.trim() })
+      setStatus('done')
+    } catch {
+      setErrMsg('Something went wrong. Please try again.')
+      setStatus('error')
+    }
+  }
+
+  if (!open) return null
+
+  return (
+    <div ref={overlayRef} onClick={onClose}
+      className="fixed inset-0 z-[60] flex items-center justify-center px-4"
+      style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}>
+      <div onClick={e => e.stopPropagation()}
+        className="w-full max-w-sm rounded-2xl border border-white/[0.09] p-7 relative"
+        style={{ background: 'var(--surface-2)' }}>
+
+        {/* Close */}
+        <button onClick={onClose} aria-label="Close"
+          className="absolute top-4 right-4 w-7 h-7 flex items-center justify-center rounded-lg text-gray-600 hover:text-gray-300 hover:bg-white/[0.07] transition-all">
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+
+        {status === 'done' ? (
+          <div className="text-center py-4">
+            <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4 border"
+              style={{ background: 'rgba(16,185,129,0.08)', borderColor: 'rgba(16,185,129,0.25)' }}>
+              <svg className="w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <p className="text-sm font-semibold text-white mb-1">You&apos;re on the list.</p>
+            <p className="text-xs text-gray-500 mb-5">
+              We&apos;ll reach out when enterprise features land in Aegis Lite.
+            </p>
+            <button onClick={onClose}
+              className="px-5 py-2 text-xs font-semibold text-white rounded-xl hover:opacity-90 transition-all"
+              style={{ background: 'linear-gradient(135deg, #3b82f6, #6366f1)' }}>
+              Done
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="mb-5">
+              <div className="logo-mark mx-auto mb-3" style={{ width: 28, height: 28, fontSize: 12 }}>A</div>
+              <h2 className="text-base font-semibold text-white text-center">Join Early Access</h2>
+              <p className="text-xs text-gray-500 text-center mt-1 leading-relaxed">
+                Be the first to know when enterprise features —
+                SOC 2 controls, multi-tenant isolation, approval workflows —
+                come to Aegis Lite.
+              </p>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-3">
+              <div>
+                <label className="block text-[11px] text-gray-500 mb-1.5">Work email</label>
+                <input type="email" required value={email} onChange={e => setEmail(e.target.value)}
+                  placeholder="you@company.com" className="input-base" />
+              </div>
+              <div>
+                <label className="block text-[11px] text-gray-500 mb-1.5">
+                  Company <span className="text-gray-700">(optional)</span>
+                </label>
+                <input type="text" value={company} onChange={e => setCompany(e.target.value)}
+                  placeholder="Acme Corp" className="input-base" />
+              </div>
+
+              {errMsg && (
+                <p className="text-[11px] text-red-400 px-1">{errMsg}</p>
+              )}
+
+              <button type="submit" disabled={status === 'loading'}
+                className="w-full py-2.5 text-sm font-semibold text-white rounded-xl transition-all disabled:opacity-60 hover:opacity-90 cursor-pointer"
+                style={{ background: 'linear-gradient(135deg, #3b82f6, #6366f1)' }}>
+                {status === 'loading' ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    Submitting…
+                  </span>
+                ) : 'Request early access →'}
+              </button>
+            </form>
+
+            <p className="text-[10px] text-gray-700 text-center mt-4">
+              No spam. Unsubscribe any time. View{' '}
+              <a href="https://github.com/jesseboudreau80/aegis-lite/blob/main/SECURITY.md"
+                target="_blank" rel="noopener noreferrer"
+                className="underline hover:text-gray-500 transition-colors">
+                privacy policy
+              </a>.
+            </p>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── Main ────────────────────────────────────────────────────────────────────────
 export default function LandingPage() {
   const { user, loading } = useAuth()
   const router = useRouter()
-  const [status, setStatus]             = useState<StatusData | null>(null)
+  const [status, setStatus]           = useState<StatusData | null>(null)
+  const [earlyAccessOpen, setEarlyAccessOpen] = useState(false)
 
   useEffect(() => {
     if (!loading && user) router.replace('/dashboard')
@@ -276,6 +406,8 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen text-gray-100" style={{ background: 'var(--surface-1)' }}>
+
+      <EarlyAccessModal open={earlyAccessOpen} onClose={() => setEarlyAccessOpen(false)} />
 
       {/* ── Navbar ──────────────────────────────────────────────────────────── */}
       <header className="sticky top-0 z-50 border-b border-white/[0.06]"
@@ -307,15 +439,14 @@ export default function LandingPage() {
           <div className="flex items-center gap-2.5">
             <a href="https://github.com/jesseboudreau80/aegis-lite"
               target="_blank" rel="noopener noreferrer"
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-400 hover:text-gray-200 rounded-lg hover:bg-white/[0.05] transition-all">
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-400 hover:text-gray-200 rounded-lg hover:bg-white/[0.05] transition-all">
               <GithubIcon className="w-3.5 h-3.5" />
-              GitHub
+              <span className="hidden sm:inline">GitHub</span>
             </a>
-            <a href="https://aegis.jesseboudreau.com" target="_blank" rel="noopener noreferrer"
-              className="hidden lg:flex items-center gap-1 px-3 py-1.5 text-xs text-gray-500 hover:text-gray-200 rounded-lg border border-white/[0.07] hover:border-white/[0.12] transition-all">
-              Enterprise
-              <ExternalIcon />
-            </a>
+            <button onClick={() => setEarlyAccessOpen(true)}
+              className="hidden sm:flex items-center gap-1 px-3 py-1.5 text-xs text-gray-500 hover:text-gray-200 rounded-lg border border-white/[0.07] hover:border-white/[0.12] transition-all cursor-pointer">
+              Early Access
+            </button>
             <Link href="/login"
               className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white rounded-lg transition-all hover:opacity-90 hover:scale-[1.02]"
               style={{ background: 'linear-gradient(135deg, #3b82f6, #6366f1)' }}>

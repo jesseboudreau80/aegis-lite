@@ -6,7 +6,7 @@ export const STORAGE_KEY_EMAIL     = 'aegis_lite_user_email'
 export const STORAGE_KEY_JWT       = 'aegis_lite_jwt'
 export const STORAGE_KEY_TIMESTAMP = 'aegis_lite_auth_timestamp'
 
-export const SESSION_TTL_MS = 15 * 60 * 1000  // 15 minutes
+export const SESSION_TTL_MS = 8 * 60 * 60 * 1000  // 8 hours
 
 const _client: AxiosInstance = axios.create({
   baseURL: PROXY_BASE,
@@ -31,6 +31,7 @@ export function initApiClient(userEmail: string, jwt?: string | null): void {
   if (typeof window === 'undefined') return
   localStorage.setItem(STORAGE_KEY_EMAIL, userEmail)
   if (jwt) localStorage.setItem(STORAGE_KEY_JWT, jwt)
+  localStorage.setItem(STORAGE_KEY_TIMESTAMP, String(Date.now()))
   document.cookie = 'aegis_session=authenticated; path=/'
 }
 

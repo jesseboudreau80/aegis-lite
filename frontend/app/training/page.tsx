@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/context/AuthContext'
 import { api } from '@/lib/api'
@@ -35,21 +35,32 @@ const STEPS = [
 export default function TrainingPage() {
   const { user, refreshUser } = useAuth()
   const router = useRouter()
-  const [step, setStep]           = useState(0)
+  const [step, setStep]             = useState(0)
   const [completing, setCompleting] = useState(false)
+  const [error, setError]           = useState('')
+
+  // Move render-phase redirect into an effect to avoid React anti-pattern.
+  useEffect(() => {
+    if (user?.training_completed) router.replace('/dashboard')
+  }, [user, router])
 
   const isLast = step === STEPS.length - 1
 
   const handleComplete = async () => {
     setCompleting(true)
+    setError('')
     try {
       await api.completeTraining()
       await refreshUser()
       router.replace('/dashboard')
-    } catch { setCompleting(false) }
+    } catch {
+      setError('Something went wrong. Please try again.')
+      setCompleting(false)
+    }
   }
 
-  if (user?.training_completed) { router.replace('/dashboard'); return null }
+  // While completing or already done, don't render the form.
+  if (user?.training_completed) return null
 
   const current = STEPS[step]
 
@@ -92,18 +103,34 @@ export default function TrainingPage() {
           <p className="text-sm text-gray-400 leading-relaxed">{current.content}</p>
         </div>
 
+        {error && (
+          <div className="mb-3 px-3 py-2 rounded-lg border text-xs text-red-400"
+            style={{ background: 'rgba(239,68,68,0.06)', borderColor: 'rgba(239,68,68,0.2)' }}>
+            {error}
+          </div>
+        )}
+
         <div className="flex gap-3">
           {step > 0 && (
             <button onClick={() => setStep(s => s - 1)}
-              className="px-4 py-2 text-xs text-gray-400 hover:text-gray-200 border border-white/[0.08] hover:border-white/[0.14] rounded-xl transition-all">
+              disabled={completing}
+              className="px-4 py-2 text-xs text-gray-400 hover:text-gray-200 border border-white/[0.08] hover:border-white/[0.14] rounded-xl transition-all disabled:opacity-40">
               ← Back
             </button>
           )}
           <button onClick={isLast ? handleComplete : () => setStep(s => s + 1)}
             disabled={completing}
-            className="flex-1 py-2.5 text-sm font-semibold text-white rounded-xl transition-all disabled:opacity-50 hover:opacity-90"
+            className="flex-1 py-2.5 text-sm font-semibold text-white rounded-xl transition-all disabled:opacity-60 hover:opacity-90 cursor-pointer disabled:cursor-default"
             style={{ background: 'linear-gradient(135deg, #3b82f6, #6366f1)' }}>
-            {completing ? 'Completing…' : isLast ? 'Complete training & enter workspace' : 'Continue →'}
+            {completing ? (
+              <span className="flex items-center justify-center gap-2">
+                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                Completing…
+              </span>
+            ) : isLast ? 'Complete training & enter workspace' : 'Continue →'}
           </button>
         </div>
 

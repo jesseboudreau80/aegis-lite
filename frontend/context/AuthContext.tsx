@@ -73,8 +73,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     function handleVisibility() {
       if (document.visibilityState === 'hidden') return
       if (isPublicRoute(pathname)) return
+      // Only hard-expire on actual JWT token expiry — not stale timestamp.
+      // isSessionValid() would give false-positives immediately after login
+      // (before any API call updates the timestamp), causing redirect loops.
       const jwt = localStorage.getItem(KEY_JWT)
-      if (!isSessionValid() || (jwt ? isJWTExpired(jwt) : false)) {
+      if (jwt && isJWTExpired(jwt)) {
         clearApiClient()
         router.replace('/login')
       }
@@ -122,15 +125,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       api.validateStoredJWT(storedJWT)
         .then(applyUser)
         .catch(() => {
+          // Single fast retry — don't hold loading=true for 2s (blank screen freeze).
           setTimeout(() => {
             api.validateStoredJWT(storedJWT)
               .then(applyUser)
               .catch(() => {
                 clearApiClient()
-                router.replace('/login')
                 setLoading(false)
+                router.replace('/login')
               })
-          }, 2000)
+          }, 500)
         })
     } else {
       setLoading(false)

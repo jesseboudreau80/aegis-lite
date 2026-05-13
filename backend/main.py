@@ -181,6 +181,7 @@ app.add_middleware(JWTMiddleware)
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 from routes.auth_routes import router as auth_router
+from routes.early_access import router as early_access_router
 from routes.agents import router as agents_router
 from routes.audit import router as audit_router
 from routes.chat import router as chat_router
@@ -195,6 +196,7 @@ from routes.usage import router as usage_router
 from routes.users import router as users_router
 
 app.include_router(auth_router)
+app.include_router(early_access_router)
 app.include_router(agents_router)
 app.include_router(audit_router)
 app.include_router(chat_router)
