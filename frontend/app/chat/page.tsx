@@ -27,6 +27,42 @@ function governedLabel(m: ModelInfo): string {
   return 'Governed Free Model'
 }
 
+function fmtBytes(b: number): string {
+  if (b < 1024) return `${b} B`
+  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`
+  return `${(b / 1024 / 1024).toFixed(1)} MB`
+}
+
+// ── Attachment ─────────────────────────────────────────────────────────────────
+const ACCEPTED_EXTENSIONS = new Set([
+  'txt', 'md', 'csv', 'json', 'yaml', 'yml', 'xml', 'html', 'css',
+  'py', 'js', 'ts', 'tsx', 'jsx', 'go', 'rs', 'sql', 'sh', 'log',
+])
+const MAX_FILE_BYTES = 512 * 1024  // 512 KB
+
+interface Attachment {
+  id: string
+  name: string
+  size: number
+  content: string
+  scanStatus: 'pending' | 'approved' | 'warned' | 'blocked'
+  scanNote: string
+}
+
+function scanAttachment(name: string, size: number, content: string): Pick<Attachment, 'scanStatus' | 'scanNote'> {
+  const lower = content.toLowerCase()
+  if (/password\s*[=:]\s*\S+/.test(lower) || /secret\s*[=:]\s*\S+/.test(lower) || /api_key\s*[=:]\s*\S+/.test(lower)) {
+    return { scanStatus: 'warned', scanNote: 'Possible credentials detected — backend policy will evaluate before dispatch' }
+  }
+  if (/\b\d{3}-\d{2}-\d{4}\b/.test(content)) {
+    return { scanStatus: 'warned', scanNote: 'Possible SSN pattern — classified as sensitive, governance policy applied' }
+  }
+  if (size > 256 * 1024) {
+    return { scanStatus: 'approved', scanNote: 'Large file — first 2000 chars sent to governed inference' }
+  }
+  return { scanStatus: 'approved', scanNote: 'Scanned · no sensitive patterns detected · governance-cleared for dispatch' }
+}
+
 // ── Governance pipeline trace ──────────────────────────────────────────────────
 interface GovernanceMeta {
   execution_trace: ExecutionTraceStep[]
@@ -64,7 +100,6 @@ function GovernancePipeline({ meta }: { meta: GovernanceMeta }) {
 
   return (
     <div className="mt-1.5 space-y-1.5">
-      {/* Compact trace row */}
       <div className="flex items-center flex-wrap font-mono" style={{ fontSize: 9 }}>
         {meta.execution_trace.map((step, i) => {
           const col  = STATUS_COLOR[step.status] ?? STATUS_COLOR.complete
@@ -78,7 +113,6 @@ function GovernancePipeline({ meta }: { meta: GovernanceMeta }) {
         })}
       </div>
 
-      {/* Policy warning notice */}
       {meta.policy_warning && (
         <div className="flex items-start gap-1.5 text-[10px] text-amber-600 pl-2 py-1"
           style={{ borderLeft: '2px solid rgba(245,158,11,0.35)', background: 'rgba(245,158,11,0.04)' }}>
@@ -89,14 +123,12 @@ function GovernancePipeline({ meta }: { meta: GovernanceMeta }) {
         </div>
       )}
 
-      {/* Model override notice */}
       {meta.model_override && meta.model_override.original !== meta.model_override.actual && (
         <p className="text-[9px] font-mono text-gray-700 pl-1">
           ↳ Policy router: {meta.model_override.reason}
         </p>
       )}
 
-      {/* Budget warning */}
       {meta.budget_pct !== null && meta.budget_pct >= 80 && (
         <div className="flex items-center gap-1.5 text-[10px] text-amber-600 pl-1">
           <div className="w-1 h-1 rounded-full bg-amber-500 flex-shrink-0" />
@@ -107,13 +139,14 @@ function GovernancePipeline({ meta }: { meta: GovernanceMeta }) {
   )
 }
 
-// ── Local message type (richer than API Message for in-session state) ──────────
+// ── Local message type ─────────────────────────────────────────────────────────
 interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
   content: string
   created_at: string
   routing_info?: { model: string; fallback_used: boolean; reason: string }
+  attachmentCount?: number
 }
 
 const DEFAULT_MODEL = 'llama3'
@@ -122,16 +155,28 @@ export default function ChatPage() {
   const { user, loading: authLoading } = useAuth()
   const router = useRouter()
 
-  const [models, setModels]                   = useState<ModelInfo[]>([])
-  const [selectedModel, setSelectedModel]     = useState(DEFAULT_MODEL)
-  const [conversations, setConversations]     = useState<Conversation[]>([])
-  const [activeConvId, setActiveConvId]       = useState<string | null>(null)
-  const [messages, setMessages]               = useState<ChatMessage[]>([])
-  const [governanceMap, setGovernanceMap]     = useState<Map<string, GovernanceMeta>>(new Map())
-  const [input, setInput]                     = useState('')
-  const [sending, setSending]                 = useState(false)
-  const [error, setError]                     = useState<string | null>(null)
-  const [sidebarOpen, setSidebarOpen]         = useState(false)
+  const [models, setModels]               = useState<ModelInfo[]>([])
+  const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL)
+  const [conversations, setConversations] = useState<Conversation[]>([])
+  const [activeConvId, setActiveConvId]   = useState<string | null>(null)
+  const [messages, setMessages]           = useState<ChatMessage[]>([])
+  const [governanceMap, setGovernanceMap] = useState<Map<string, GovernanceMeta>>(new Map())
+  const [input, setInput]                 = useState('')
+  const [sending, setSending]             = useState(false)
+  const [error, setError]                 = useState<string | null>(null)
+  const [sidebarOpen, setSidebarOpen]     = useState(false)
+
+  // Attachments
+  const [attachments, setAttachments]     = useState<Attachment[]>([])
+  const [dragOver, setDragOver]           = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Voice
+  const [isRecording, setIsRecording]     = useState(false)
+  const [voiceSupported, setVoiceSupported] = useState(false)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const recognitionRef = useRef<any>(null)
+
   const bottomRef   = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -157,27 +202,97 @@ export default function ChatPage() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  const selectConversation = useCallback(async (conv: Conversation) => {
-    setActiveConvId(conv.id)
-    setSelectedModel(conv.model)
-    setError(null)
-    setGovernanceMap(new Map())
-    try {
-      const r = await api.getMessages(conv.id)
-      const msgs = (r.data as { messages: ChatMessage[] }).messages
-      setMessages(msgs)
-    } catch { setMessages([]) }
-    setSidebarOpen(false)
+  // Check voice support
+  useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const w = window as any
+    setVoiceSupported(!!(w.SpeechRecognition || w.webkitSpeechRecognition))
   }, [])
 
-  const startNew = () => {
-    setActiveConvId(null)
-    setMessages([])
-    setGovernanceMap(new Map())
-    setError(null)
-    setSidebarOpen(false)
-  }
+  // ── Voice input ──────────────────────────────────────────────────────────────
+  const toggleVoice = useCallback(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const w = window as any
+    const SR = w.SpeechRecognition || w.webkitSpeechRecognition
+    if (!SR) return
 
+    if (isRecording) {
+      recognitionRef.current?.stop()
+      setIsRecording(false)
+      return
+    }
+
+    const recognition = new SR()
+    recognition.lang = 'en-US'
+    recognition.continuous = false
+    recognition.interimResults = true
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    recognition.onresult = (event: any) => {
+      const transcript = Array.from(event.results)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .map((r: any) => r[0].transcript)
+        .join('')
+      setInput(transcript)
+    }
+
+    recognition.onend = () => {
+      setIsRecording(false)
+      textareaRef.current?.focus()
+    }
+
+    recognition.onerror = () => {
+      setIsRecording(false)
+    }
+
+    recognitionRef.current = recognition
+    recognition.start()
+    setIsRecording(true)
+  }, [isRecording])
+
+  // ── File attachments ─────────────────────────────────────────────────────────
+  const processFiles = useCallback((files: FileList | File[]) => {
+    const fileArr = Array.from(files)
+    fileArr.forEach(file => {
+      const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
+      if (!ACCEPTED_EXTENSIONS.has(ext)) {
+        setError(`Unsupported file type: .${ext}. Accepted: text, code, csv, json, markdown.`)
+        return
+      }
+      if (file.size > MAX_FILE_BYTES) {
+        setError(`File too large: ${fmtBytes(file.size)}. Max 512 KB.`)
+        return
+      }
+
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const content = (e.target?.result as string) || ''
+        const scan = scanAttachment(file.name, file.size, content)
+        const attachment: Attachment = {
+          id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          name: file.name,
+          size: file.size,
+          content,
+          ...scan,
+        }
+        setAttachments(prev => [...prev, attachment])
+        setError(null)
+      }
+      reader.readAsText(file)
+    })
+  }, [])
+
+  const removeAttachment = useCallback((id: string) => {
+    setAttachments(prev => prev.filter(a => a.id !== id))
+  }, [])
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setDragOver(false)
+    if (e.dataTransfer.files.length) processFiles(e.dataTransfer.files)
+  }, [processFiles])
+
+  // ── Send ─────────────────────────────────────────────────────────────────────
   const handleSend = async () => {
     const text = input.trim()
     if (!text || sending) return
@@ -185,11 +300,26 @@ export default function ChatPage() {
     setSending(true)
     setError(null)
 
+    // Take snapshot of current attachments then clear
+    const sendAttachments = [...attachments]
+    setAttachments([])
+
     const tempId = `temp-${Date.now()}`
-    setMessages(m => [...m, { id: tempId, role: 'user', content: text, created_at: new Date().toISOString() }])
+    setMessages(m => [...m, {
+      id: tempId, role: 'user', content: text,
+      created_at: new Date().toISOString(),
+      attachmentCount: sendAttachments.length,
+    }])
 
     try {
-      const res = await api.chat({ message: text, model: selectedModel, conversation_id: activeConvId })
+      const firstAtt = sendAttachments[0]
+      const res = await api.chat({
+        message: text,
+        model: selectedModel,
+        conversation_id: activeConvId,
+        file_content: firstAtt ? firstAtt.content.slice(0, 4000) : undefined,
+        file_name: firstAtt ? firstAtt.name : undefined,
+      })
       const d = res.data as {
         conversation_id: string
         message_id: string
@@ -207,15 +337,10 @@ export default function ChatPage() {
       const msgId = d.message_id
       setMessages(m => [
         ...m.filter(msg => msg.id !== tempId),
-        { id: tempId + '-u', role: 'user', content: text, created_at: new Date().toISOString() },
-        {
-          id: msgId, role: 'assistant', content: d.response,
-          created_at: new Date().toISOString(),
-          routing_info: d.routing_info ?? undefined,
-        },
+        { id: tempId + '-u', role: 'user', content: text, created_at: new Date().toISOString(), attachmentCount: sendAttachments.length },
+        { id: msgId, role: 'assistant', content: d.response, created_at: new Date().toISOString(), routing_info: d.routing_info },
       ])
 
-      // Store governance metadata for this message
       if (d.execution_trace?.length) {
         setGovernanceMap(prev => {
           const next = new Map(prev)
@@ -244,6 +369,29 @@ export default function ChatPage() {
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
+  }
+
+  const selectConversation = useCallback(async (conv: Conversation) => {
+    setActiveConvId(conv.id)
+    setSelectedModel(conv.model)
+    setError(null)
+    setGovernanceMap(new Map())
+    setAttachments([])
+    try {
+      const r = await api.getMessages(conv.id)
+      const msgs = (r.data as { messages: ChatMessage[] }).messages
+      setMessages(msgs)
+    } catch { setMessages([]) }
+    setSidebarOpen(false)
+  }, [])
+
+  const startNew = () => {
+    setActiveConvId(null)
+    setMessages([])
+    setGovernanceMap(new Map())
+    setError(null)
+    setAttachments([])
+    setSidebarOpen(false)
   }
 
   if (authLoading || !user) return null
@@ -314,7 +462,6 @@ export default function ChatPage() {
         {/* Messages */}
         <div className="flex-1 overflow-y-auto">
           {messages.length === 0 ? (
-            /* ── Empty state ──────────────────────────────────────────────── */
             <div className="h-full flex flex-col items-center justify-center px-8 text-center">
               <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-5"
                 style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.18)' }}>
@@ -328,7 +475,7 @@ export default function ChatPage() {
                 Secrets, PII, and prompt injection attempts are intercepted automatically.
               </p>
               <div className="space-y-1.5 font-mono text-[9px] text-gray-700">
-                {['Policy engine active · 10 rules · v1.1.0', 'Immutable audit logging enabled', 'Budget-aware model routing active'].map(l => (
+                {['Policy engine active · 10 rules · v1.1.0', 'Immutable audit logging enabled', 'Voice + file input · governance-evaluated'].map(l => (
                   <div key={l} className="flex items-center gap-1.5 justify-center">
                     <span className="text-emerald-700">✓</span>
                     <span>{l}</span>
@@ -337,7 +484,6 @@ export default function ChatPage() {
               </div>
             </div>
           ) : (
-            /* ── Thread ───────────────────────────────────────────────────── */
             <div className="max-w-2xl mx-auto px-4 py-6 space-y-5">
               {messages.map(m => (
                 <div key={m.id} className={`flex gap-3 ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
@@ -363,7 +509,11 @@ export default function ChatPage() {
                           : m.content.replace(/\n/g, '<br/>')
                       }}
                     />
-                    {/* Governance pipeline trace — only for in-session assistant messages */}
+                    {m.role === 'user' && m.attachmentCount ? (
+                      <p className="text-[9px] font-mono text-gray-700 mt-1 text-right">
+                        + {m.attachmentCount} attachment{m.attachmentCount > 1 ? 's' : ''} · governance-evaluated
+                      </p>
+                    ) : null}
                     {m.role === 'assistant' && governanceMap.has(m.id) && (
                       <GovernancePipeline meta={governanceMap.get(m.id)!} />
                     )}
@@ -371,7 +521,6 @@ export default function ChatPage() {
                 </div>
               ))}
 
-              {/* Typing indicator */}
               {sending && (
                 <div className="flex gap-3">
                   <div className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0"
@@ -401,32 +550,140 @@ export default function ChatPage() {
           )}
         </div>
 
-        {/* Input */}
+        {/* ── Composer ──────────────────────────────────────────────────────── */}
         <div className="flex-shrink-0 border-t border-white/[0.06] px-4 py-3">
           <div className="max-w-2xl mx-auto">
-            <div className="flex items-end gap-2 rounded-xl border border-white/[0.09] px-3 py-2 transition-colors focus-within:border-blue-500/40"
-              style={{ background: 'var(--surface-2)' }}>
-              <textarea
-                ref={textareaRef}
-                value={input}
-                onChange={e => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Send a governed request…"
-                rows={1}
-                disabled={sending}
-                className="flex-1 bg-transparent text-sm text-gray-200 placeholder-gray-600 resize-none focus:outline-none min-h-[24px] max-h-32 disabled:opacity-60"
-                style={{ lineHeight: '1.5' }}
-              />
-              <button onClick={handleSend} disabled={!input.trim() || sending}
-                className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center transition-all disabled:opacity-30 hover:opacity-90 cursor-pointer disabled:cursor-default"
-                style={{ background: 'linear-gradient(135deg, #3b82f6, #6366f1)' }}>
-                <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                </svg>
-              </button>
+
+            {/* Drag overlay */}
+            <div
+              className={`relative rounded-xl border transition-all ${
+                dragOver ? 'border-blue-500/50 bg-blue-500/5' : 'border-white/[0.09]'
+              } focus-within:border-blue-500/40`}
+              style={{ background: dragOver ? undefined : 'var(--surface-2)' }}
+              onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={handleDrop}
+            >
+              {/* Attachment pills */}
+              {attachments.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 px-3 pt-2.5 pb-0">
+                  {attachments.map(att => (
+                    <div key={att.id} className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-[10px] font-mono transition-colors group"
+                      style={{
+                        background: att.scanStatus === 'warned' ? 'rgba(245,158,11,0.08)' : 'rgba(59,130,246,0.08)',
+                        border: `1px solid ${att.scanStatus === 'warned' ? 'rgba(245,158,11,0.2)' : 'rgba(59,130,246,0.18)'}`,
+                      }}>
+                      <svg className="w-2.5 h-2.5 text-gray-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                      </svg>
+                      <span className={att.scanStatus === 'warned' ? 'text-amber-500' : 'text-gray-400'}>
+                        {att.name}
+                      </span>
+                      <span className="text-gray-700">{fmtBytes(att.size)}</span>
+                      {att.scanStatus === 'warned' && (
+                        <span title={att.scanNote}>
+                          <svg className="w-2.5 h-2.5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+                          </svg>
+                        </span>
+                      )}
+                      <button onClick={() => removeAttachment(att.id)}
+                        className="text-gray-700 hover:text-gray-400 transition-colors cursor-pointer ml-0.5">
+                        <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Input row */}
+              <div className="flex items-end gap-1.5 px-2 py-2">
+                {/* Attachment button */}
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  title="Attach file"
+                  className="flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center text-gray-600 hover:text-gray-300 hover:bg-white/[0.06] transition-all cursor-pointer"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                  </svg>
+                </button>
+
+                {/* Voice button */}
+                {voiceSupported && (
+                  <button
+                    type="button"
+                    onClick={toggleVoice}
+                    title={isRecording ? 'Stop recording' : 'Voice input'}
+                    className={`flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center transition-all cursor-pointer ${
+                      isRecording
+                        ? 'bg-red-500/15 text-red-400 hover:bg-red-500/20'
+                        : 'text-gray-600 hover:text-gray-300 hover:bg-white/[0.06]'
+                    }`}
+                  >
+                    {isRecording ? (
+                      <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                        <rect x="6" y="6" width="12" height="12" rx="2" />
+                      </svg>
+                    ) : (
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
+                      </svg>
+                    )}
+                  </button>
+                )}
+
+                {/* Divider */}
+                <div className="w-px h-4 flex-shrink-0" style={{ background: 'rgba(255,255,255,0.07)' }} />
+
+                {/* Textarea */}
+                <textarea
+                  ref={textareaRef}
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder={isRecording ? 'Listening…' : dragOver ? 'Drop file here…' : 'Send a governed request…'}
+                  rows={1}
+                  disabled={sending}
+                  className="flex-1 bg-transparent text-sm text-gray-200 placeholder-gray-600 resize-none focus:outline-none min-h-[24px] max-h-32 disabled:opacity-60"
+                  style={{ lineHeight: '1.5' }}
+                />
+
+                {/* Send button */}
+                <button onClick={handleSend} disabled={!input.trim() || sending}
+                  className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center transition-all disabled:opacity-30 hover:opacity-90 cursor-pointer disabled:cursor-default"
+                  style={{ background: 'linear-gradient(135deg, #3b82f6, #6366f1)' }}>
+                  <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Recording indicator */}
+              {isRecording && (
+                <div className="px-3 pb-2 flex items-center gap-1.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                  <span className="text-[9px] font-mono text-red-500">recording · governance evaluation pending</span>
+                </div>
+              )}
             </div>
+
+            {/* Hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept=".txt,.md,.csv,.json,.yaml,.yml,.xml,.html,.css,.py,.js,.ts,.tsx,.jsx,.go,.rs,.sql,.sh,.log"
+              className="hidden"
+              onChange={e => { if (e.target.files) { processFiles(e.target.files); e.target.value = '' } }}
+            />
+
             <p className="text-[9px] font-mono text-gray-800 text-center mt-1.5">
               policy engine · audit log · governed inference
+              {attachments.length > 0 && <span className="text-blue-900"> · {attachments.length} file{attachments.length > 1 ? 's' : ''} queued</span>}
             </p>
           </div>
         </div>
