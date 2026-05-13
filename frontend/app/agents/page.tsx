@@ -29,6 +29,7 @@ export default function AgentsPage() {
   const [runError, setRunError]     = useState('')
   const [showCreate, setShowCreate] = useState(false)
   const [creating, setCreating]     = useState(false)
+  const [createError, setCreateError] = useState('')
   const [form, setForm]             = useState({ name: '', description: '', system_prompt: '', model: 'llama3' })
 
   useEffect(() => {
@@ -65,13 +66,18 @@ export default function AgentsPage() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
     setCreating(true)
+    setCreateError('')
     try {
       await api.createAgent(form)
       const r = await api.getAgents()
       setAgents(r.data as Agent[])
       setShowCreate(false)
       setForm({ name: '', description: '', system_prompt: '', model: 'llama3' })
-    } catch { /* handle silently */ } finally {
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+        || 'Failed to create agent. Check your inputs and try again.'
+      setCreateError(msg)
+    } finally {
       setCreating(false)
     }
   }
@@ -102,7 +108,7 @@ export default function AgentsPage() {
       <div className="flex flex-1 min-h-0">
 
         {/* ── Agent list panel ──────────────────────────────────────────── */}
-        <div className="w-72 flex-shrink-0 border-r border-white/[0.06] overflow-y-auto"
+        <div className={`${selected ? 'hidden md:flex' : 'flex'} flex-col w-full md:w-72 flex-shrink-0 border-r border-white/[0.06] overflow-y-auto`}
           style={{ background: 'var(--surface-2)' }}>
 
           {/* Create form */}
@@ -127,13 +133,16 @@ export default function AgentsPage() {
                   />
                 </div>
               ))}
+              {createError && (
+                <p className="text-[10px] text-red-400 px-1">{createError}</p>
+              )}
               <div className="flex gap-2 pt-1">
                 <button type="submit" disabled={creating}
                   className="flex-1 py-1.5 text-white text-xs font-semibold rounded-lg disabled:opacity-50 transition-all hover:opacity-90 cursor-pointer"
                   style={{ background: 'linear-gradient(135deg, #3b82f6, #6366f1)' }}>
                   {creating ? 'Creating…' : 'Create agent'}
                 </button>
-                <button type="button" onClick={() => setShowCreate(false)}
+                <button type="button" onClick={() => { setShowCreate(false); setCreateError('') }}
                   className="px-3 text-gray-500 hover:text-gray-300 text-xs transition-colors cursor-pointer">
                   Cancel
                 </button>
@@ -196,7 +205,7 @@ export default function AgentsPage() {
         </div>
 
         {/* ── Run panel ─────────────────────────────────────────────────── */}
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className={`${selected ? 'flex' : 'hidden md:flex'} flex-1 flex-col min-w-0`}>
           {!selected ? (
             /* ── Empty state ──────────────────────────────────────────────── */
             <div className="flex-1 flex items-center justify-center px-8">
@@ -217,11 +226,20 @@ export default function AgentsPage() {
           ) : (
             <>
               {/* Agent detail header */}
-              <div className="border-b border-white/[0.06] px-6 py-4 flex-shrink-0">
+              <div className="border-b border-white/[0.06] px-4 md:px-6 py-3 md:py-4 flex-shrink-0">
                 <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <h2 className="text-sm font-semibold text-white">{selected.name}</h2>
-                    <p className="text-[12px] text-gray-500 mt-0.5 leading-relaxed">{selected.description}</p>
+                  <div className="flex items-start gap-2">
+                    {/* Mobile back button */}
+                    <button onClick={() => setSelected(null)}
+                      className="md:hidden mt-0.5 text-gray-500 hover:text-gray-300 transition-colors cursor-pointer flex-shrink-0">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                      </svg>
+                    </button>
+                    <div>
+                      <h2 className="text-sm font-semibold text-white">{selected.name}</h2>
+                      <p className="text-[12px] text-gray-500 mt-0.5 leading-relaxed">{selected.description}</p>
+                    </div>
                   </div>
                   {selected.agent_type === 'builtin' && (
                     <span className="badge badge-info flex-shrink-0">Built-in</span>

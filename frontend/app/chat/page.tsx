@@ -7,6 +7,7 @@ import { api, STORAGE_KEY_JWT } from '@/lib/api'
 import { Conversation, ModelInfo, ExecutionTraceStep } from '@/lib/types'
 import AppNav from '@/components/AppNav'
 import LogoutButton from '@/components/LogoutButton'
+import RuntimeStatus from '@/components/RuntimeStatus'
 
 function formatContent(text: string): string {
   return text
@@ -534,10 +535,14 @@ export default function ChatPage() {
           <div className="divider hidden sm:block" style={{ height: 16 }} />
           <AppNav currentPage="/chat" />
 
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-3">
+            {/* Runtime health indicators */}
+            <div className="hidden lg:block">
+              <RuntimeStatus />
+            </div>
             {/* Streaming status indicator */}
             {isStreaming && (
-              <div className="flex items-center gap-1.5 mr-1">
+              <div className="flex items-center gap-1.5">
                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                 <span className="text-[10px] font-mono text-emerald-600 hidden sm:block">streaming</span>
               </div>
