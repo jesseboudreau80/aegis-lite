@@ -229,7 +229,7 @@ export default function GovernancePage() {
                             <span className={sevCfg.badge}>{e.severity}</span>
                           </div>
                           <p className="text-[10px] text-gray-500 truncate">
-                            {e.actor_email || 'System'} · {e.event_type}
+                            {e.actor_email || 'system'} · {e.event_type.replace(/_/g, ' ')}
                           </p>
                         </div>
                         <span className="text-[10px] text-gray-600 flex-shrink-0 tabular-nums">

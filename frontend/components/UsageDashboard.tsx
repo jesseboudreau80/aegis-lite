@@ -167,7 +167,7 @@ export default function UsageDashboard({ isAdmin = false }: { isAdmin?: boolean 
       {/* Model breakdown */}
       {usage_by_model.length > 0 ? (
         <div className="card p-5">
-          <h3 className="stat-label mb-4">Usage by Model</h3>
+          <h3 className="stat-label mb-4">Usage by Runtime</h3>
           <div className="space-y-3">
             {usage_by_model.sort((a, b) => b.total_cost_usd - a.total_cost_usd).map(m => {
               const pct = (m.total_cost_usd / max_cost) * 100

@@ -100,7 +100,7 @@ export default function AuditPage() {
           <div className="flex items-center gap-1.5 flex-wrap">
             {DECISION_FILTERS.map(d => (
               <button key={d} onClick={() => { setDecision(d); setPage(1) }}
-                className={`px-2.5 py-1 rounded-lg text-[10px] font-medium transition-all ${
+                className={`px-2.5 py-1 rounded-lg text-[10px] font-medium transition-all cursor-pointer ${
                   decisionFilter === d
                     ? 'bg-white/[0.1] text-white border border-white/[0.12]'
                     : 'text-gray-500 hover:text-gray-300 border border-transparent'
@@ -119,13 +119,13 @@ export default function AuditPage() {
         <div className="flex-1 overflow-hidden flex">
           {/* Table */}
           <div className={`flex flex-col overflow-hidden transition-all ${selected ? 'w-3/5' : 'w-full'}`}>
-            <div className="flex-1 overflow-y-auto">
-              <table className="data-table">
+            <div className="flex-1 overflow-y-auto overflow-x-auto">
+              <table className="data-table" style={{ minWidth: 560 }}>
                 <thead className="sticky top-0" style={{ background: 'var(--surface-2)' }}>
                   <tr>
                     <th>Time</th>
                     <th>User</th>
-                    <th>Model</th>
+                    <th>Runtime</th>
                     <th>Decision</th>
                     <th>Cost</th>
                     <th>Prompt</th>
@@ -182,11 +182,11 @@ export default function AuditPage() {
               <span className="text-[10px] text-gray-600">Page {page} of {totalPages}</span>
               <div className="flex items-center gap-1">
                 <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-                  className="px-2.5 py-1 text-[10px] text-gray-500 hover:text-gray-300 disabled:opacity-30 border border-white/[0.06] rounded-md transition-colors">
+                  className="px-2.5 py-1 text-[10px] text-gray-500 hover:text-gray-300 disabled:opacity-30 disabled:cursor-default cursor-pointer border border-white/[0.06] rounded-md transition-colors">
                   ← Prev
                 </button>
                 <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages}
-                  className="px-2.5 py-1 text-[10px] text-gray-500 hover:text-gray-300 disabled:opacity-30 border border-white/[0.06] rounded-md transition-colors">
+                  className="px-2.5 py-1 text-[10px] text-gray-500 hover:text-gray-300 disabled:opacity-30 disabled:cursor-default cursor-pointer border border-white/[0.06] rounded-md transition-colors">
                   Next →
                 </button>
               </div>
@@ -200,25 +200,29 @@ export default function AuditPage() {
               <div className="sticky top-0 px-4 py-3 border-b border-white/[0.04] flex items-center justify-between"
                 style={{ background: 'var(--surface-2)' }}>
                 <span className="text-xs font-semibold text-gray-300">Event Detail</span>
-                <button onClick={() => setSelected(null)} className="text-gray-600 hover:text-gray-400 transition-colors">
+                <button onClick={() => setSelected(null)} className="text-gray-600 hover:text-gray-400 transition-colors cursor-pointer">
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
               </div>
               <div className="p-4 space-y-4">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className={DECISION_BADGE[selected.decision] || DECISION_BADGE.allow}>
                     {selected.decision}
                   </span>
                   <span className="text-[10px] text-gray-600 font-mono">{selected.model || 'unknown'}</span>
+                  <span className="text-[10px] text-gray-700">·</span>
+                  <span className="text-[10px] text-gray-600">{selected.status}</span>
                 </div>
 
                 {[
-                  { label: 'Timestamp', value: new Date(selected.timestamp).toLocaleString() },
-                  { label: 'User',      value: selected.user },
-                  { label: 'Status',    value: selected.status },
-                  { label: 'Cost',      value: `$${selected.cost.toFixed(8)}` },
+                  { label: 'Timestamp',       value: new Date(selected.timestamp).toLocaleString() },
+                  { label: 'Actor',            value: selected.user },
+                  { label: 'Inference cost',   value: `$${selected.cost.toFixed(8)} USD` },
+                  { label: 'Tokens (in/out)',  value: selected.tokens_in != null
+                      ? `${selected.tokens_in?.toLocaleString() ?? '—'} / ${selected.tokens_out?.toLocaleString() ?? '—'}`
+                      : '—' },
                 ].map(({ label, value }) => (
                   <div key={label}>
                     <p className="stat-label mb-1">{label}</p>
@@ -227,15 +231,20 @@ export default function AuditPage() {
                 ))}
 
                 <div>
-                  <p className="stat-label mb-1.5">Prompt</p>
-                  <div className="rounded-lg p-3 text-[11px] text-gray-400 font-mono leading-relaxed break-all"
+                  <p className="stat-label mb-1.5">Prompt (truncated)</p>
+                  <div className="rounded-lg p-3 text-[11px] text-gray-400 font-mono leading-relaxed break-all max-h-32 overflow-y-auto"
                     style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.05)' }}>
                     {selected.prompt || '—'}
                   </div>
                 </div>
 
-                <div className="pt-2 border-t border-white/[0.04]">
-                  <p className="text-[10px] text-gray-600">Event ID: <span className="font-mono text-gray-500">{selected.id}</span></p>
+                <div className="pt-2 border-t border-white/[0.04] space-y-1">
+                  <p className="text-[9px] text-gray-700 font-mono">
+                    audit_id: <span className="text-gray-600">{selected.id}</span>
+                  </p>
+                  <p className="text-[9px] text-gray-800 font-mono">
+                    policy_version: v1.1.0
+                  </p>
                 </div>
               </div>
             </div>
