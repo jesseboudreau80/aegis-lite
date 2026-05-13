@@ -9,6 +9,52 @@ import AppNav from '@/components/AppNav'
 import LogoutButton from '@/components/LogoutButton'
 import RuntimeStatus from '@/components/RuntimeStatus'
 
+// ── Governance thinking indicator ──────────────────────────────────────────────
+type StreamingStage = 'evaluating' | 'routing' | 'streaming' | null
+
+const STAGE_LABELS: Record<NonNullable<StreamingStage>, string> = {
+  evaluating: 'Evaluating policy chain',
+  routing:    'Routing to governed provider',
+  streaming:  'Streaming governed response',
+}
+
+const STAGE_SUB: Record<NonNullable<StreamingStage>, string> = {
+  evaluating: '10-rule deterministic chain · v1.1.0',
+  routing:    'Budget-aware provider selection',
+  streaming:  'Token-by-token · policy enforced',
+}
+
+function ThinkingIndicator({ stage, elapsedMs }: { stage: NonNullable<StreamingStage>; elapsedMs: number }) {
+  const elapsed = (elapsedMs / 1000).toFixed(1)
+  return (
+    <div className="flex gap-3 justify-start">
+      <div className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"
+        style={{ background: 'linear-gradient(135deg, #3b82f6, #6366f1)' }}>
+        <span className="text-white text-[10px] font-bold">A</span>
+      </div>
+      <div className="rounded-2xl rounded-bl-sm px-4 py-3 border border-white/[0.07] min-w-[200px]"
+        style={{ background: 'var(--surface-2)' }}>
+        <div className="flex items-center gap-2.5 mb-1.5">
+          {/* Animated governance dots */}
+          <div className="flex gap-1 items-center">
+            {[0, 1, 2].map(i => (
+              <div key={i} className="w-1.5 h-1.5 rounded-full bg-blue-500"
+                style={{
+                  animation: 'thinking-pulse 1.4s ease-in-out infinite',
+                  animationDelay: `${i * 0.2}s`,
+                  opacity: 0.3,
+                }} />
+            ))}
+          </div>
+          <span className="text-[11px] text-gray-400 font-medium">{STAGE_LABELS[stage]}</span>
+          <span className="text-[9px] font-mono text-gray-700 ml-auto">{elapsed}s</span>
+        </div>
+        <p className="text-[9px] font-mono text-gray-700">{STAGE_SUB[stage]}</p>
+      </div>
+    </div>
+  )
+}
+
 function formatContent(text: string): string {
   return text
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
@@ -242,8 +288,12 @@ export default function ChatPage() {
   const [input, setInput]                 = useState('')
   const [sending, setSending]             = useState(false)
   const [isStreaming, setIsStreaming]     = useState(false)
+  const [streamingStage, setStreamingStage] = useState<StreamingStage>(null)
+  const [elapsedMs, setElapsedMs]         = useState(0)
   const [error, setError]                 = useState<string | null>(null)
   const [sidebarOpen, setSidebarOpen]     = useState(false)
+  const elapsedTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const startTimeRef    = useRef<number>(0)
 
   // Attachments
   const [attachments, setAttachments]       = useState<Attachment[]>([])
@@ -359,15 +409,30 @@ export default function ChatPage() {
     if (e.dataTransfer.files.length) processFiles(e.dataTransfer.files)
   }, [processFiles])
 
+  // ── Elapsed timer helpers ─────────────────────────────────────────────────────
+  const startElapsed = useCallback(() => {
+    startTimeRef.current = Date.now()
+    setElapsedMs(0)
+    if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current)
+    elapsedTimerRef.current = setInterval(() => {
+      setElapsedMs(Date.now() - startTimeRef.current)
+    }, 100)
+  }, [])
+
+  const stopElapsed = useCallback(() => {
+    if (elapsedTimerRef.current) { clearInterval(elapsedTimerRef.current); elapsedTimerRef.current = null }
+  }, [])
+
   // ── Stop generation ──────────────────────────────────────────────────────────
   const stopGeneration = useCallback(() => {
     abortRef.current?.abort()
     abortRef.current = null
+    stopElapsed()
     setIsStreaming(false)
+    setStreamingStage(null)
     setSending(false)
-    // Finalize any partial streaming message
     setMessages(m => m.map(msg => msg.isStreaming ? { ...msg, isStreaming: false } : msg))
-  }, [])
+  }, [stopElapsed])
 
   // ── Send (streaming) ──────────────────────────────────────────────────────────
   const handleSend = async () => {
@@ -376,7 +441,9 @@ export default function ChatPage() {
     setInput('')
     setSending(true)
     setIsStreaming(false)
+    setStreamingStage('evaluating')
     setError(null)
+    startElapsed()
 
     const sendAttachments = [...attachments]
     setAttachments([])
@@ -468,7 +535,7 @@ export default function ChatPage() {
 
           if (e.type === 'meta') {
             gotMeta = true
-            setIsStreaming(true)
+            setStreamingStage('routing')
             if (!activeConvId && e.conversation_id) setActiveConvId(e.conversation_id as string)
             // Insert blank streaming assistant message
             setMessages(m => [...m, {
@@ -488,6 +555,8 @@ export default function ChatPage() {
                 return next
               })
             }
+            // Brief routing stage, then transition to streaming
+            setTimeout(() => { setStreamingStage('streaming'); setIsStreaming(true) }, 180)
 
           } else if (e.type === 'token') {
             setMessages(m => m.map(msg =>
@@ -526,6 +595,8 @@ export default function ChatPage() {
 
             const routedModel = e.model as string
             if (routedModel && routedModel !== selectedModel) setSelectedModel(routedModel)
+            stopElapsed()
+            setStreamingStage(null)
             api.getConversations().then(r => setConversations(r.data as Conversation[])).catch(() => {})
           }
         }
@@ -542,7 +613,9 @@ export default function ChatPage() {
         setMessages(m => m.filter(msg => msg.id !== userTempId && msg.id !== streamingId))
       }
     } finally {
+      stopElapsed()
       setIsStreaming(false)
+      setStreamingStage(null)
       setSending(false)
       abortRef.current = null
     }
@@ -654,7 +727,14 @@ export default function ChatPage() {
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto">
-          {messages.length === 0 ? (
+          {messages.length === 0 && sending && streamingStage && streamingStage !== 'streaming' ? (
+            /* Thinking on empty state — before first message arrives */
+            <div className="h-full flex items-end pb-8 px-4">
+              <div className="max-w-2xl w-full mx-auto">
+                <ThinkingIndicator stage={streamingStage} elapsedMs={elapsedMs} />
+              </div>
+            </div>
+          ) : messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center px-8 text-center">
               <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-5"
                 style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.18)' }}>
@@ -731,6 +811,11 @@ export default function ChatPage() {
                   </div>
                 </div>
               ))}
+
+              {/* Governance thinking indicator — shown during policy eval and routing */}
+              {sending && streamingStage && streamingStage !== 'streaming' && (
+                <ThinkingIndicator stage={streamingStage} elapsedMs={elapsedMs} />
+              )}
 
               {error && (
                 <div className="mx-auto max-w-sm text-xs text-red-400 border border-red-500/20 rounded-xl px-3 py-2.5 text-center"

@@ -374,11 +374,10 @@ function EarlyAccessModal({ open, onClose }: { open: boolean; onClose: () => voi
 
             <p className="text-[10px] text-gray-700 text-center mt-4">
               No spam. Unsubscribe any time. View{' '}
-              <a href="https://github.com/jesseboudreau80/aegis-lite/blob/main/SECURITY.md"
-                target="_blank" rel="noopener noreferrer"
+              <Link href="/privacy"
                 className="underline hover:text-gray-500 transition-colors">
                 privacy policy
-              </a>.
+              </Link>.
             </p>
           </>
         )}
@@ -908,9 +907,13 @@ export default function LandingPage() {
               </a>
               {' '}· Apache License 2.0
             </p>
-            <div className="flex items-center gap-1.5 text-[10px] text-gray-700">
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-600 flex-shrink-0" />
-              {status ? `${status.status.charAt(0).toUpperCase()}${status.status.slice(1)} · v1.0.0` : 'Aegis Lite v1.0.0'}
+            <div className="flex items-center gap-3 text-[10px] text-gray-700">
+              <Link href="/privacy" className="hover:text-gray-400 transition-colors">Privacy</Link>
+              <Link href="/terms" className="hover:text-gray-400 transition-colors">Terms</Link>
+              <div className="flex items-center gap-1.5">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-600 flex-shrink-0" />
+                {status ? `${status.status.charAt(0).toUpperCase()}${status.status.slice(1)} · v1.0.0` : 'Aegis Lite v1.0.0'}
+              </div>
             </div>
           </div>
         </div>

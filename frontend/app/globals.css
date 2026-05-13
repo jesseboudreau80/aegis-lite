@@ -243,6 +243,11 @@ body { overflow-x: clip; max-width: 100vw; background: var(--surface-1); }
   50%       { opacity: 0; }
 }
 
+@keyframes thinking-pulse {
+  0%, 100% { opacity: 0.25; transform: scale(0.85); }
+  50%       { opacity: 1;    transform: scale(1.1); }
+}
+
 
 /* ── Risk ring ───────────────────────────────────────────────────────────── */
 .risk-ring { transform: rotate(-90deg); }

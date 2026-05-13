@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-const PUBLIC_EXACT = new Set(['/', '/login'])
+const PUBLIC_EXACT = new Set(['/', '/login', '/privacy', '/terms'])
 const PUBLIC_PREFIXES = [
   '/api/auth/',              // login + magic-link endpoints
   '/api/status',             // public system status (no auth)
