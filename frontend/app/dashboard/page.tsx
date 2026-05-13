@@ -84,28 +84,35 @@ interface ActivityEvent {
   isNew?: boolean
 }
 
-const SYNTHETIC_POOL: Omit<ActivityEvent, 'id' | 'time'>[] = [
-  { type: 'pass',  message: 'Prompt classified: Internal' },
-  { type: 'pass',  message: 'Secrets scan: no credentials detected' },
-  { type: 'pass',  message: 'PII check: passed — no redactions required' },
-  { type: 'pass',  message: 'Prompt injection scan: cleared' },
-  { type: 'info',  message: 'Policy engine v1.1.0 evaluated — 10 rules applied' },
-  { type: 'pass',  message: 'Data classification: Public — all providers eligible' },
-  { type: 'pass',  message: 'Rate limit check passed' },
-  { type: 'info',  message: 'Budget-aware routing: free-tier model selected' },
-  { type: 'info',  message: 'Request routed to governed inference layer' },
-  { type: 'warn',  message: 'PII detected: email address redacted before dispatch' },
-  { type: 'info',  message: 'Provider routing: OpenRouter runtime selected' },
-  { type: 'audit', message: 'Token usage logged' },
-  { type: 'pass',  message: 'Policy decision: allow · risk 0.03' },
-  { type: 'warn',  message: 'Sensitive keyword flagged — governance notice logged' },
-  { type: 'info',  message: 'Budget controls active — workspace policy enforced' },
-  { type: 'audit', message: 'Audit event recorded — request logged' },
-  { type: 'pass',  message: 'External research classification: approved for dispatch' },
-  { type: 'warn',  message: 'Classification: Internal — OpenRouter free tier selected' },
-  { type: 'pass',  message: 'Agent execution: policy-checked before run' },
-  { type: 'info',  message: 'Governance mode: deterministic-phase1' },
-]
+function shortId() { return Math.random().toString(36).slice(2, 8) }
+function riskScore() { return (Math.random() * 0.4).toFixed(2) }
+function tokenCount() { return (Math.floor(Math.random() * 400) + 60).toString() }
+
+function syntheticPool(): Omit<ActivityEvent, 'id' | 'time'>[] {
+  const r1 = shortId(), r2 = shortId(), r3 = shortId()
+  return [
+    { type: 'pass',  message: `req-${r1} · classified: Internal · 10 rules applied` },
+    { type: 'pass',  message: `req-${r2} · secrets scan: 0 credentials detected` },
+    { type: 'pass',  message: `req-${r1} · PII scan: no redactions required` },
+    { type: 'pass',  message: `req-${r3} · injection scan: cleared · risk ${riskScore()}` },
+    { type: 'info',  message: `policy engine v1.1.0 evaluated — phase-1 deterministic` },
+    { type: 'pass',  message: `req-${r2} · classification: Public · all runtimes eligible` },
+    { type: 'pass',  message: `req-${r1} · rate limit check: within daily threshold` },
+    { type: 'info',  message: `budget-aware routing: free-tier runtime selected` },
+    { type: 'info',  message: `req-${r3} · dispatch → OpenRouter governed inference` },
+    { type: 'warn',  message: `req-${r2} · PII: email address redacted before dispatch` },
+    { type: 'info',  message: `req-${r1} · runtime: governed free-tier · ${tokenCount()} tokens` },
+    { type: 'audit', message: `req-${r2} · audit record written · cost $0.00000${Math.floor(Math.random()*9)+1}` },
+    { type: 'pass',  message: `req-${r3} · policy decision: allow · risk ${riskScore()}` },
+    { type: 'warn',  message: `req-${r1} · sensitive keyword flagged · governance notice logged` },
+    { type: 'info',  message: `workspace budget enforced · ${Math.floor(Math.random()*40)+10}% utilised` },
+    { type: 'audit', message: `req-${r2} · audit log written · policy v1.1.0` },
+    { type: 'pass',  message: `req-${r3} · research classification: Public · approved for dispatch` },
+    { type: 'warn',  message: `req-${r1} · classification: Internal · premium runtime restricted` },
+    { type: 'pass',  message: `req-${r2} · agent execution: policy-checked · within budget` },
+    { type: 'info',  message: `governance mode: deterministic-phase1 · 0 LLM calls in engine` },
+  ]
+}
 
 type DemoAPIEvent = {
   id: string; timestamp: string; decision: string;
@@ -117,22 +124,19 @@ function nowStr() {
 }
 
 function apiEventToActivity(e: DemoAPIEvent): ActivityEvent {
-  const dec = e.decision
+  const dec  = e.decision
+  const risk = (e.risk_score ?? 0).toFixed(2)
+  const rid  = e.id.slice(0, 8)
   let type: ActivityEvent['type'] = 'pass'
-  let message = `Policy decision: ${dec}`
+  let message = `req-${rid} · policy: ${dec}`
 
-  if (dec === 'warn')     { type = 'warn';  message = `Policy notice: warn · risk ${(e.risk_score ?? 0).toFixed(2)}` }
-  if (dec === 'escalate') { type = 'warn';  message = `Governance escalation · risk ${(e.risk_score ?? 0).toFixed(2)}` }
-  if (dec === 'modify')   { type = 'info';  message = `Prompt modified: PII redaction applied` }
-  if (dec === 'block')    { type = 'warn';  message = `Request blocked · risk ${(e.risk_score ?? 0).toFixed(2)} · ${(e.flags ?? []).join(', ')}` }
-  if (dec === 'allow')    { type = 'pass';  message = `Policy decision: allow · risk ${(e.risk_score ?? 0).toFixed(2)}` }
+  if (dec === 'warn')     { type = 'warn';  message = `req-${rid} · policy notice: warn · risk ${risk}` }
+  if (dec === 'escalate') { type = 'warn';  message = `req-${rid} · governance escalation · risk ${risk}` }
+  if (dec === 'modify')   { type = 'info';  message = `req-${rid} · prompt modified: PII redaction applied` }
+  if (dec === 'block')    { type = 'warn';  message = `req-${rid} · blocked · risk ${risk} · ${(e.flags ?? []).slice(0,2).join(', ')}` }
+  if (dec === 'allow')    { type = 'pass';  message = `req-${rid} · policy: allow · risk ${risk} · v1.1.0` }
 
-  return {
-    id: e.id,
-    time: nowStr(),
-    type,
-    message,
-  }
+  return { id: e.id, time: nowStr(), type, message }
 }
 
 function PolicyActivityFeed() {
@@ -147,15 +151,16 @@ function PolicyActivityFeed() {
         const apiEvents: ActivityEvent[] = (r.data.events as DemoAPIEvent[])
           .slice(0, 8)
           .map(apiEventToActivity)
-        const extra = SYNTHETIC_POOL.slice(0, 4).map((s, i) => ({
+        const pool = syntheticPool()
+        const extra = pool.slice(0, 4).map((s, i) => ({
           ...s, id: `seed-${i}`, time: nowStr(),
         }))
         setEvents([...apiEvents, ...extra].slice(0, 12))
         setSeeded(true)
       })
       .catch(() => {
-        // Fallback: purely synthetic
-        const initial = SYNTHETIC_POOL.slice(0, 10).map((s, i) => ({
+        const pool = syntheticPool()
+        const initial = pool.slice(0, 10).map((s, i) => ({
           ...s, id: `init-${i}`, time: nowStr(),
         }))
         setEvents(initial)
@@ -167,7 +172,8 @@ function PolicyActivityFeed() {
   useEffect(() => {
     if (!seeded) return
     const tick = () => {
-      const template = SYNTHETIC_POOL[Math.floor(Math.random() * SYNTHETIC_POOL.length)]
+      const pool = syntheticPool()
+      const template = pool[Math.floor(Math.random() * pool.length)]
       setEvents(prev => [
         { ...template, id: `live-${Date.now()}`, time: nowStr(), isNew: true },
         ...prev.map(e => ({ ...e, isNew: false })).slice(0, 14),
