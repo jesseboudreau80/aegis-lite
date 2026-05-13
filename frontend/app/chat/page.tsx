@@ -99,8 +99,35 @@ function GovernancePipeline({ meta }: { meta: GovernanceMeta }) {
     complete: '✓', warning: '⚠', blocked: '✕',
   }
 
+  // Detect enforcement-level events from trace flags
+  const policyStep = meta.execution_trace.find(s => s.stage === 'policy')
+  const riskScore = (policyStep?.metadata?.risk_score as number) ?? 0
+  const flags = (policyStep?.metadata?.flags as string[]) ?? []
+  const decision = policyStep?.message.replace('Policy: ', '').split(' ')[0] ?? 'allow'
+  const isEnforced = decision !== 'allow' && decision !== 'Policy:'
+  const isBlocked  = decision === 'block'
+
+  // Flag display labels
+  const FLAG_LABELS: Record<string, string> = {
+    pii_detected:            'PII detected',
+    email_detected:          'Email pattern',
+    ssn_detected:            'SSN pattern',
+    credit_card_detected:    'Card number',
+    secrets_detected:        'Credentials',
+    injection_attempt:       'Injection attempt',
+    sensitive_keywords_detected: 'Sensitive keywords',
+    restricted_data_blocked: 'Restricted data',
+    confidential_data_external_provider: 'Confidential → external',
+    high_confidence_injection: 'High-confidence injection',
+  }
+
+  const enforcementColor = isBlocked
+    ? { bg: 'rgba(239,68,68,0.06)', border: 'rgba(239,68,68,0.2)', text: '#f87171', dot: '#ef4444' }
+    : { bg: 'rgba(245,158,11,0.06)', border: 'rgba(245,158,11,0.2)', text: '#fbbf24', dot: '#f59e0b' }
+
   return (
-    <div className="mt-1.5 space-y-1.5">
+    <div className="mt-2 space-y-1.5">
+      {/* Compact trace row — always shown */}
       <div className="flex items-center flex-wrap font-mono" style={{ fontSize: 9 }}>
         {meta.execution_trace.map((step, i) => {
           const col  = STATUS_COLOR[step.status] ?? STATUS_COLOR.complete
@@ -114,22 +141,59 @@ function GovernancePipeline({ meta }: { meta: GovernanceMeta }) {
         })}
       </div>
 
-      {meta.policy_warning && (
-        <div className="flex items-start gap-1.5 text-[10px] text-amber-600 pl-2 py-1"
-          style={{ borderLeft: '2px solid rgba(245,158,11,0.35)', background: 'rgba(245,158,11,0.04)' }}>
-          <svg className="w-3 h-3 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-          </svg>
-          <span>{meta.policy_warning}</span>
+      {/* Enforcement banner — shown when policy did something meaningful */}
+      {isEnforced && (
+        <div className="rounded-lg px-3 py-2.5 mt-1"
+          style={{ background: enforcementColor.bg, border: `1px solid ${enforcementColor.border}` }}>
+          <div className="flex items-start gap-2">
+            <div className="flex-shrink-0 mt-0.5">
+              {isBlocked ? (
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke={enforcementColor.dot} strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                </svg>
+              ) : (
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke={enforcementColor.dot} strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+                </svg>
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap mb-1">
+                <span className="text-[10px] font-semibold" style={{ color: enforcementColor.text }}>
+                  Governance {isBlocked ? 'blocked' : decision === 'escalate' ? 'escalated' : decision === 'modify' ? 'modified request' : 'notice'}
+                </span>
+                <span className="text-[9px] font-mono" style={{ color: enforcementColor.dot }}>
+                  risk {riskScore.toFixed(2)} · policy v1.1.0
+                </span>
+              </div>
+              {flags.length > 0 && (
+                <div className="flex flex-wrap gap-1 mb-1">
+                  {flags.slice(0, 4).map(f => (
+                    <span key={f} className="text-[9px] font-mono px-1.5 py-0.5 rounded"
+                      style={{ background: 'rgba(255,255,255,0.06)', color: '#6b7280' }}>
+                      {FLAG_LABELS[f] ?? f.replace(/_/g, ' ')}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {meta.policy_warning && (
+                <p className="text-[10px] leading-relaxed" style={{ color: enforcementColor.text, opacity: 0.8 }}>
+                  {meta.policy_warning}
+                </p>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
+      {/* Model override */}
       {meta.model_override && meta.model_override.original !== meta.model_override.actual && (
         <p className="text-[9px] font-mono text-gray-700 pl-1">
           ↳ Policy router: {meta.model_override.reason}
         </p>
       )}
 
+      {/* Budget warning */}
       {meta.budget_pct !== null && meta.budget_pct >= 80 && (
         <div className="flex items-center gap-1.5 text-[10px] text-amber-600 pl-1">
           <div className="w-1 h-1 rounded-full bg-amber-500 flex-shrink-0" />
@@ -349,7 +413,37 @@ export default function ChatPage() {
 
       if (!resp.ok) {
         const errData = await resp.json().catch(() => ({}))
-        throw new Error((errData as { detail?: string }).detail || `HTTP ${resp.status}`)
+        const detail = (errData as { detail?: string }).detail || `HTTP ${resp.status}`
+        // 403 = governance block — show as enforcement event, not raw error
+        if (resp.status === 403) {
+          const blockReason = detail.replace('Request blocked by policy: ', '')
+          const blockMsgId = `block-${Date.now()}`
+          setMessages(m => [...m, {
+            id: blockMsgId, role: 'assistant',
+            content: '[Request blocked by governance policy — no inference performed]',
+            created_at: new Date().toISOString(),
+          }])
+          setGovernanceMap(prev => {
+            const next = new Map(prev)
+            next.set(blockMsgId, {
+              execution_trace: [
+                { stage: 'rate_limit', message: 'Rate check', status: 'complete' },
+                { stage: 'policy',     message: 'Policy: block',  status: 'blocked',
+                  metadata: { risk_score: 1.0, flags: ['restricted_data_blocked'], policy_version: 'v1.1.0' } },
+                { stage: 'routing',    message: 'Inference blocked', status: 'blocked' },
+                { stage: 'response',   message: 'No inference', status: 'blocked' },
+              ],
+              policy_warning: blockReason,
+              model_override: null,
+              budget_pct: null,
+            })
+            return next
+          })
+          setSending(false)
+          setIsStreaming(false)
+          return
+        }
+        throw new Error(detail)
       }
 
       const reader = resp.body!.getReader()
