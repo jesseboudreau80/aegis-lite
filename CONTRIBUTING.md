@@ -15,7 +15,7 @@ cd backend
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp ../.env.example .env  # set LOCAL_DEV=true for development
-LOCAL_DEV=true uvicorn main:app --reload --port 8100
+LOCAL_DEV=true uvicorn main:app --reload --port 8107
 
 # Frontend (new terminal)
 cd frontend && npm install && npm run dev

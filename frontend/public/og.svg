@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="630" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#07070f"/>
+      <stop offset="100%" stop-color="#0e0e1a"/>
+    </linearGradient>
+    <linearGradient id="shield" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#3b82f6"/>
+      <stop offset="100%" stop-color="#6366f1"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1200" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#3b82f6" stop-opacity="0"/>
+      <stop offset="40%" stop-color="#3b82f6" stop-opacity="0.15"/>
+      <stop offset="60%" stop-color="#6366f1" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#6366f1" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bg)"/>
+
+  <!-- Subtle radial glow -->
+  <ellipse cx="600" cy="200" rx="500" ry="220" fill="#3b82f6" fill-opacity="0.06"/>
+
+  <!-- Top accent line -->
+  <rect x="0" y="0" width="1200" height="2" fill="url(#accent)"/>
+
+  <!-- Border -->
+  <rect x="1" y="1" width="1198" height="628" rx="0" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+
+  <!-- Shield mark -->
+  <g transform="translate(96, 200)">
+    <rect width="80" height="80" rx="20" fill="url(#shield)"/>
+    <path d="M40 14L18 23v18c0 13 10 26 22 30 12-4 22-17 22-30V23L40 14z"
+          fill="white" fill-opacity="0.9"/>
+    <text x="40" y="56" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="700" font-size="20" fill="white">A</text>
+  </g>
+
+  <!-- Logo + name -->
+  <text x="96" y="335" font-family="system-ui,-apple-system,sans-serif" font-weight="700" font-size="18" fill="rgba(255,255,255,0.35)" letter-spacing="3">AEGIS LITE</text>
+
+  <!-- OSS badge -->
+  <rect x="96" y="348" width="98" height="22" rx="11" fill="rgba(59,130,246,0.1)" stroke="rgba(59,130,246,0.25)" stroke-width="1"/>
+  <text x="145" y="363" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11" fill="#60a5fa" font-weight="500">Apache 2.0</text>
+
+  <!-- Main headline -->
+  <text x="96" y="430" font-family="system-ui,-apple-system,sans-serif" font-weight="700" font-size="58" fill="white" letter-spacing="-1.5">Open Source AI</text>
+  <text x="96" y="500" font-family="system-ui,-apple-system,sans-serif" font-weight="700" font-size="58" fill="white" letter-spacing="-1.5">Governance Layer</text>
+
+  <!-- Subheadline -->
+  <text x="96" y="548" font-family="system-ui,sans-serif" font-size="22" fill="rgba(156,163,175,1)">Policy enforcement before every token · Self-hosted · Deterministic</text>
+
+  <!-- Feature pills — right side -->
+  <g transform="translate(760, 180)">
+    <!-- Policy Engine pill -->
+    <rect x="0" y="0" width="340" height="54" rx="12" fill="rgba(59,130,246,0.07)" stroke="rgba(59,130,246,0.18)" stroke-width="1"/>
+    <circle cx="24" cy="27" r="5" fill="#10b981"/>
+    <text x="42" y="23" font-family="system-ui,sans-serif" font-size="13" fill="rgba(255,255,255,0.8)" font-weight="600">Policy Engine</text>
+    <text x="42" y="40" font-family="ui-monospace,monospace" font-size="11" fill="rgba(107,114,128,1)">10-rule deterministic chain · v1.1.0</text>
+
+    <!-- Audit Log pill -->
+    <rect x="0" y="68" width="340" height="54" rx="12" fill="rgba(99,102,241,0.07)" stroke="rgba(99,102,241,0.18)" stroke-width="1"/>
+    <circle cx="24" cy="95" r="5" fill="#10b981"/>
+    <text x="42" y="91" font-family="system-ui,sans-serif" font-size="13" fill="rgba(255,255,255,0.8)" font-weight="600">Immutable Audit Log</text>
+    <text x="42" y="108" font-family="ui-monospace,monospace" font-size="11" fill="rgba(107,114,128,1)">Every request · cost · policy decision</text>
+
+    <!-- Streaming pill -->
+    <rect x="0" y="136" width="340" height="54" rx="12" fill="rgba(16,185,129,0.06)" stroke="rgba(16,185,129,0.15)" stroke-width="1"/>
+    <circle cx="24" cy="163" r="5" fill="#10b981"/>
+    <text x="42" y="159" font-family="system-ui,sans-serif" font-size="13" fill="rgba(255,255,255,0.8)" font-weight="600">Governed Streaming</text>
+    <text x="42" y="176" font-family="ui-monospace,monospace" font-size="11" fill="rgba(107,114,128,1)">Token-by-token · live telemetry</text>
+
+    <!-- Multi-provider pill -->
+    <rect x="0" y="204" width="340" height="54" rx="12" fill="rgba(245,158,11,0.06)" stroke="rgba(245,158,11,0.14)" stroke-width="1"/>
+    <circle cx="24" cy="231" r="5" fill="#10b981"/>
+    <text x="42" y="227" font-family="system-ui,sans-serif" font-size="13" fill="rgba(255,255,255,0.8)" font-weight="600">Multi-Provider Router</text>
+    <text x="42" y="244" font-family="ui-monospace,monospace" font-size="11" fill="rgba(107,114,128,1)">OpenRouter · Anthropic · OpenAI</text>
+
+    <!-- PII pill -->
+    <rect x="0" y="272" width="340" height="54" rx="12" fill="rgba(239,68,68,0.06)" stroke="rgba(239,68,68,0.14)" stroke-width="1"/>
+    <circle cx="24" cy="299" r="5" fill="#10b981"/>
+    <text x="42" y="295" font-family="system-ui,sans-serif" font-size="13" fill="rgba(255,255,255,0.8)" font-weight="600">PII Detection + Redaction</text>
+    <text x="42" y="312" font-family="ui-monospace,monospace" font-size="11" fill="rgba(107,114,128,1)">SSN · cards · email · secrets</text>
+  </g>
+
+  <!-- Bottom URL -->
+  <text x="96" y="600" font-family="ui-monospace,monospace" font-size="14" fill="rgba(75,85,99,1)">aegis-lite.jesseboudreau.com · github.com/jesseboudreau80/aegis-lite</text>
+</svg>

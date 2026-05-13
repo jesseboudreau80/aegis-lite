@@ -45,12 +45,17 @@ pip install -r requirements.txt
 # Configure
 cp ../.env.example .env
 # Edit .env — minimum required:
-#   SECRET_KEY=<openssl rand -hex 32>
-#   ANTHROPIC_API_KEY=sk-ant-...  (or OPENAI_API_KEY / OPENROUTER_API_KEY)
-#   LOCAL_DEV=true  (for development — allows weak secrets)
+#   SECRET_KEY=<openssl rand -hex 32>       (generate: openssl rand -hex 32)
+#   OPENROUTER_API_KEY=sk-or-v1-...         (free tier at openrouter.ai)
+#
+# Optional: ANTHROPIC_API_KEY, OPENAI_API_KEY, PERPLEXITY_API_KEY
+#
+# Development only — enables weak SECRET_KEY and X-User-Email bypass:
+#   LOCAL_DEV=true
+# WARNING: Never set LOCAL_DEV=true in production.
 
 # Start
-uvicorn main:app --reload --port 8100
+uvicorn main:app --reload --port 8107
 ```
 
 The backend seeds demo users, built-in agents, and the support routing matrix on first start.

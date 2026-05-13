@@ -312,6 +312,9 @@ export default function ChatPage() {
   const bottomRef   = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
+  // Cleanup elapsed timer on unmount
+  useEffect(() => () => { if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current) }, [])
+
   useEffect(() => {
     if (!authLoading && !user) router.replace('/login')
     if (!authLoading && user && !user.training_completed) router.replace('/training')

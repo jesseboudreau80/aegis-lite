@@ -27,7 +27,7 @@ The initial public release. Establishes the governance substrate that all future
 - [x] Magic-link + password JWT authentication
 - [x] Governance dashboard with audit explorer
 - [x] Usage and cost tracking
-- [x] Docker Compose deployment
+- [ ] Docker Compose deployment
 - [x] SQLite default, PostgreSQL-ready
 
 ---

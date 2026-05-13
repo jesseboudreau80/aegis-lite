@@ -908,6 +908,7 @@ export default function LandingPage() {
               {' '}· Apache License 2.0
             </p>
             <div className="flex items-center gap-3 text-[10px] text-gray-700">
+              <Link href="/about" className="hover:text-gray-400 transition-colors">About</Link>
               <Link href="/privacy" className="hover:text-gray-400 transition-colors">Privacy</Link>
               <Link href="/terms" className="hover:text-gray-400 transition-colors">Terms</Link>
               <div className="flex items-center gap-1.5">

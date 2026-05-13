@@ -14,7 +14,7 @@ Policy-before-inference · Real-time audit logging · Multi-provider routing · 
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![Issues](https://img.shields.io/github/issues/jesseboudreau80/aegis-lite?style=flat-square&color=7057ff)](https://github.com/jesseboudreau80/aegis-lite/issues)
 
-[**Live Demo**](https://aegis-lite.jesseboudreau.com) · [**Quick Start**](#quick-start) · [**Architecture**](#architecture) · [**Policy Engine**](#policy-engine) · [**Roadmap**](#roadmap)
+[**Live Demo**](https://aegis-lite.jesseboudreau.com) · [**About**](https://aegis-lite.jesseboudreau.com/about) · [**Quick Start**](#quick-start) · [**Architecture**](#architecture) · [**Policy Engine**](#policy-engine) · [**Roadmap**](#roadmap)
 
 </div>
 
@@ -85,6 +85,28 @@ OpenRouter              Perplexity
 | **Multimodal Input** | Voice transcription + file attachments (governance-evaluated) | ✅ |
 | **Onboarding Flow** | Sequential workspace orientation guide | ✅ |
 | **Early Access Capture** | Waitlist email collection | ✅ |
+
+---
+
+## Screenshots
+
+> **Live demo:** [aegis-lite.jesseboudreau.com](https://aegis-lite.jesseboudreau.com) — login with `demo@example.com` / `demo`
+
+Screenshots are tracked in [`.github/assets/`](.github/assets/). The table below will be populated as assets are captured. See the [capture guide](.github/assets/README.md) for instructions.
+
+| Governed Chat | Live Dashboard |
+|:---:|:---:|
+| *Streaming inference with real-time governance trace* | *Live governance control plane with SSE event feed* |
+
+| Governance Enforcement | Audit Explorer |
+|:---:|:---:|
+| *Policy engine blocks PII before inference* | *Filterable audit log with cost and decision trail* |
+
+**Screenshot-ready moments to capture:**
+- Chat: send a message with an SSN pattern (e.g. `My SSN is 123-45-6789`) → red enforcement banner
+- Chat: stream a normal response → shows governance trace with policy decision and token count
+- Dashboard: after 5+ requests → shows live activity feed with real governance events
+- Audit: with 10+ rows and detail panel open → shows full governance record
 
 ---
 

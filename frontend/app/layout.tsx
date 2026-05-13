@@ -18,11 +18,13 @@ export const metadata: Metadata = {
     type: 'website',
     url: 'https://aegis-lite.jesseboudreau.com',
     siteName: 'Aegis Lite',
+    images: [{ url: '/og.svg', width: 1200, height: 630, alt: 'Aegis Lite — Open Source AI Governance Layer' }],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Aegis Lite — Open-Source AI Governance',
     description: 'Policy enforcement before every AI token. Deterministic. Auditable. Self-hosted.',
+    images: ['/og.svg'],
   },
   icons: {
     icon: [
