@@ -37,10 +37,16 @@ function enforceHttps(request: NextRequest): NextResponse | null {
   }
 
   if (scheme === 'http') {
-    const url = request.nextUrl.clone()
-    url.protocol = 'https:'
+    // Build the redirect URL from the Host header (the public hostname),
+    // not from request.nextUrl which reflects the internal Next.js address.
+    // X-Forwarded-Host takes precedence if set by the edge proxy.
+    const publicHost =
+      request.headers.get('x-forwarded-host') ||
+      request.headers.get('host') ||
+      request.nextUrl.host
+    const redirectUrl = `https://${publicHost}${request.nextUrl.pathname}${request.nextUrl.search}`
     // 308 Permanent Redirect preserves the HTTP method (important for POST/SSE)
-    return NextResponse.redirect(url, { status: 308 })
+    return NextResponse.redirect(redirectUrl, { status: 308 })
   }
 
   return null
