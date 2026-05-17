@@ -1,0 +1,30 @@
+[Unit]
+Description=Aegis Lite — Next.js Frontend
+Documentation=https://aegis-lite.jesseboudreau.com
+After=network-online.target aegis-lite-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=jesse
+Group=jesse
+WorkingDirectory=/home/jesse/infra/apps/aegis-lite/frontend
+
+Environment="NODE_ENV=production"
+Environment="PORT=3007"
+Environment="API_URL=http://127.0.0.1:8107"
+Environment="PATH=/home/jesse/.nvm/versions/node/v22.22.1/bin:/home/jesse/.local/bin:/usr/local/bin:/usr/bin:/bin"
+
+ExecStart=/home/jesse/.nvm/versions/node/v22.22.1/bin/npm start -- --port 3007
+
+Restart=always
+RestartSec=10
+TimeoutStopSec=30
+TimeoutStartSec=90
+
+StandardOutput=append:/home/jesse/infra/apps/aegis-lite/.logs/frontend.log
+StandardError=append:/home/jesse/infra/apps/aegis-lite/.logs/frontend.log
+SyslogIdentifier=aegis-lite-web
+
+[Install]
+WantedBy=multi-user.target

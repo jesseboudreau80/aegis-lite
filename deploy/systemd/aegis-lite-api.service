@@ -1,0 +1,32 @@
+[Unit]
+Description=Aegis Lite — FastAPI Backend
+Documentation=https://aegis-lite-api.jesseboudreau.com/docs
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=jesse
+Group=jesse
+WorkingDirectory=/home/jesse/infra/apps/aegis-lite/backend
+
+Environment="PATH=/home/jesse/infra/apps/aegis-lite/backend/.venv/bin:/home/jesse/.local/bin:/usr/local/bin:/usr/bin:/bin"
+EnvironmentFile=/home/jesse/infra/apps/aegis-lite/backend/.env
+
+ExecStart=/home/jesse/infra/apps/aegis-lite/backend/.venv/bin/uvicorn \
+    main:app \
+    --host 0.0.0.0 \
+    --port 8107 \
+    --log-level info
+
+Restart=always
+RestartSec=10
+TimeoutStopSec=30
+TimeoutStartSec=90
+
+StandardOutput=append:/home/jesse/infra/apps/aegis-lite/.logs/backend.log
+StandardError=append:/home/jesse/infra/apps/aegis-lite/.logs/backend.log
+SyslogIdentifier=aegis-lite-api
+
+[Install]
+WantedBy=multi-user.target
