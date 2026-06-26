@@ -10,7 +10,7 @@ from config.agent_registry import BUILTIN_AGENTS
 from config.model_costs import MODEL_INFO
 from config.model_registry import ui_models
 from config.settings import settings
-from database import AsyncSessionLocal, init_db
+from database import AsyncSessionLocal, init_db, run_column_migrations
 from models import Agent, SupportRoutingMatrix, User
 
 
@@ -85,7 +85,10 @@ _DEFAULT_ROUTING_MATRIX = [
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize the database and seed demo data on startup."""
+    import time
+    app.state.start_time = time.time()
     await init_db()
+    await run_column_migrations()
 
     async with AsyncSessionLocal() as db:
         # Seed demo users
@@ -103,10 +106,16 @@ async def lifespan(app: FastAPI):
                     created_at=datetime.utcnow(),
                 ))
 
-        # Seed built-in agents
+        # Seed built-in agents (upsert: update name/description/prompt on each restart)
         for a in BUILTIN_AGENTS:
             result = await db.execute(select(Agent).where(Agent.slug == a["slug"]))
-            if not result.scalar_one_or_none():
+            existing = result.scalar_one_or_none()
+            if existing:
+                existing.name          = a["name"]
+                existing.description   = a.get("description", "")
+                existing.system_prompt = a["system_prompt"]
+                existing.updated_at    = datetime.utcnow()
+            else:
                 db.add(Agent(
                     id=str(uuid.uuid4()),
                     name=a["name"],
@@ -180,13 +189,17 @@ class JWTMiddleware(BaseHTTPMiddleware):
 app.add_middleware(JWTMiddleware)
 
 # ── Routes ────────────────────────────────────────────────────────────────────
+from routes.assistant import router as assistant_router
 from routes.auth_routes import router as auth_router
 from routes.early_access import router as early_access_router
 from routes.agents import router as agents_router
 from routes.audit import router as audit_router
 from routes.chat import router as chat_router
 from routes.conversations import router as conversations_router
+from routes.executive import router as executive_router
 from routes.governance import router as governance_router
+from routes.knowledge import router as knowledge_router
+from routes.playbooks import router as playbooks_router
 from routes.registry import router as registry_router
 from routes.research import router as research_router
 from routes.status import router as status_router
@@ -194,14 +207,19 @@ from routes.support import router as support_router
 from routes.training import router as training_router
 from routes.usage import router as usage_router
 from routes.users import router as users_router
+from routes.workspaces import router as workspaces_router
 
+app.include_router(assistant_router)
 app.include_router(auth_router)
 app.include_router(early_access_router)
 app.include_router(agents_router)
 app.include_router(audit_router)
 app.include_router(chat_router)
 app.include_router(conversations_router)
+app.include_router(executive_router)
 app.include_router(governance_router)
+app.include_router(knowledge_router)
+app.include_router(playbooks_router)
 app.include_router(registry_router)
 app.include_router(research_router)
 app.include_router(status_router)
@@ -209,6 +227,7 @@ app.include_router(support_router)
 app.include_router(training_router)
 app.include_router(usage_router)
 app.include_router(users_router)
+app.include_router(workspaces_router)
 
 
 # ── Health ────────────────────────────────────────────────────────────────────
@@ -221,6 +240,48 @@ async def health():
         "version":   "1.0.0",
         "demo_mode": settings.demo_mode,
         "models":    len(MODEL_INFO),
+    }
+
+
+@app.get("/whoami")
+async def whoami():
+    """Identity endpoint."""
+    return {
+        "app":         "Aegis Lite API",
+        "version":     "1.0.0",
+        "port":        8107,
+        "edition":     settings.aegis_edition,
+        "environment": "production",
+        "owner":       "jesse",
+    }
+
+
+@app.get("/.well-known/aegis-meta")
+async def aegis_meta():
+    """Aegis Pack Specification V1 — machine-readable identity and capability declaration."""
+    import time, os
+    start_time = getattr(app.state, "start_time", None)
+    uptime_s = int(time.time() - start_time) if start_time else None
+    return {
+        "pack_id":              "aegis-lite",
+        "pack_name":            "Aegis Lite",
+        "version":              "1.0.0",
+        "environment":          "production",
+        "frontend_port":        3007,
+        "backend_port":         8107,
+        "auth_required":        True,
+        "governance_enabled":   True,
+        "replay_supported":     False,
+        "observability_supported": False,
+        "systemd_service":      "aegis-lite.service",
+        "tunnel_name":          "reselleros",
+        "uptime_s":             uptime_s,
+        "build_sha":            os.environ.get("GIT_SHA", None),
+        "owner":                "jesse",
+        "doctrine_version":     "2026-05-18",
+        "runtime_type":         "nextjs+fastapi",
+        "capabilities":         ["chat", "agents", "audit", "governance", "training", "research",
+                                 "playbooks", "knowledge", "workspaces", "executive"],
     }
 
 

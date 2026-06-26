@@ -11,10 +11,26 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from database import get_db
 from models import Agent, AgentExecution, AgentVersion, GovernanceEvent, User
 from routes.auth import get_current_user, require_training
-from services.ai_router import call_model
+from config.model_costs import MODEL_INFO
+from services.ai_router import call_model, _key_is_configured
 from services.cost_engine import calculate_cost, estimate_tokens
 from services.policy_engine import PolicyBlockedError, build_policy_context, log_policy_event
+from services.routing_engine import FREE_FALLBACK_MODEL
 from services.trace_builder import build_execution_trace
+from config.settings import settings
+
+
+def _provider_key_ok(model: str) -> bool:
+    """Return True if the API key for this model's provider is configured."""
+    prov = MODEL_INFO.get(model, {}).get("provider", "").lower()
+    if "anthropic" in prov:
+        return _key_is_configured(settings.anthropic_api_key)
+    if "openai" in prov:
+        return _key_is_configured(settings.openai_api_key)
+    if model in ("perplexity_sonar", "perplexity_sonar_pro"):
+        return _key_is_configured(settings.perplexity_api_key)
+    # OpenRouter free-tier models work without an API key — always available.
+    return True
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 
@@ -221,6 +237,13 @@ async def run_agent(
     model = req.model or agent.model
     if agent.allowed_models and model not in agent.allowed_models:
         model = agent.allowed_models[0]
+
+    # If the selected model's API key isn't configured, prefer a working allowed
+    # model or fall back to the free OpenRouter model so agents run live rather
+    # than returning a demo-mode placeholder.
+    if not _provider_key_ok(model):
+        working = [m for m in (agent.allowed_models or []) if _provider_key_ok(m)]
+        model = working[0] if working else FREE_FALLBACK_MODEL
 
     full_prompt = req.message
     est_tokens = estimate_tokens(full_prompt)

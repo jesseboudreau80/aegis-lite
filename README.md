@@ -4,7 +4,7 @@
 
 # Aegis Lite
 
-**Open-source AI governance layer for enterprise teams.**
+**Open-source AI governance control plane.**
 
 Policy-before-inference · Real-time audit logging · Multi-provider routing · Self-hostable
 
@@ -13,6 +13,7 @@ Policy-before-inference · Real-time audit logging · Multi-provider routing · 
 [![Next.js 15](https://img.shields.io/badge/Next.js-15-black?style=flat-square&logo=nextdotjs)](https://nextjs.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![Issues](https://img.shields.io/github/issues/jesseboudreau80/aegis-lite?style=flat-square&color=7057ff)](https://github.com/jesseboudreau80/aegis-lite/issues)
+[![Product Hunt](https://img.shields.io/badge/Product_Hunt-Featured-%23DA552F?style=flat-square&logo=producthunt&logoColor=white)](https://www.producthunt.com/posts/aegis-lite)
 
 **[Live Demo](https://aegis-lite.jesseboudreau.com)** · **[About](https://aegis-lite.jesseboudreau.com/about)** · **[Quick Start](#quick-start)** · **[Architecture](#architecture)** · **[Policy Engine](#policy-engine)** · **[Roadmap](#roadmap)**
 
@@ -347,6 +348,21 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions. Issues labeled `g
 
 ## Contributing
 
+Aegis Lite has **15 pre-written contributor issues** with full technical context, acceptance criteria, and implementation hints — ready to pick up today.
+
+| Priority | Issue | Label |
+|---|---|---|
+| 🔴 High | Policy engine unit test suite | `good-first-issue` |
+| 🔴 High | IBAN PII detection rule | `good-first-issue` |
+| 🔴 High | IP-based rate limiting for auth endpoints | `good-first-issue` |
+| 🟡 Medium | Audit event detail modal + rule trace visualization | `help-wanted` |
+| 🟡 Medium | Real-time governance event stream | `help-wanted` |
+| 🟡 Medium | Docker Compose profiles (dev/prod/full) | `good-first-issue` |
+| 🟢 Any level | Railway / Fly.io deployment guide | `good-first-issue` |
+| 🟢 Any level | Agent system documentation | `good-first-issue` |
+
+Full issue list: [`docs/github-issues/`](docs/github-issues/)
+
 ```bash
 # Fork and clone
 git clone https://github.com/YOUR_USERNAME/aegis-lite.git
@@ -354,11 +370,11 @@ cd aegis-lite/backend
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
-# Add OPENROUTER_API_KEY and set LOCAL_DEV=true for development
-uvicorn main:app --reload --port 8107
+# Set LOCAL_DEV=true — no API key needed for policy engine work
+LOCAL_DEV=true uvicorn main:app --reload --port 8107
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide. Open [GitHub Discussions](https://github.com/jesseboudreau80/aegis-lite/discussions) to propose features or ask questions.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide — including policy rule conventions, code style, and what belongs in Lite vs. Enterprise. Open [GitHub Discussions](https://github.com/jesseboudreau80/aegis-lite/discussions) to propose features or ask questions.
 
 ---
 

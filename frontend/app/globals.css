@@ -145,11 +145,11 @@ body { overflow-x: clip; max-width: 100vw; background: var(--surface-1); }
 
 /* ── Logo mark ───────────────────────────────────────────────────────────── */
 .logo-mark {
-  width: 24px; height: 24px;
-  border-radius: 7px;
-  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  width: 30px !important; height: 30px !important;
+  border-radius: 0 !important;
+  background: url('/aegis-shield-sm.webp') center/contain no-repeat !important;
   display: flex; align-items: center; justify-content: center;
-  font-size: 11px; font-weight: 700; color: white;
+  font-size: 0 !important; color: transparent !important;
   flex-shrink: 0;
 }
 
@@ -287,6 +287,23 @@ input, textarea, select { min-height: 36px; }
   margin-left: 2px;
   vertical-align: middle;
   animation: blink-cursor 1s step-end infinite;
+}
+
+/* ── Agent Pantheon hologram ─────────────────────────────────────────────── */
+@keyframes holo-float {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-9px); }
+}
+@keyframes holo-glow-pulse {
+  0%, 100% { opacity: 0.28; }
+  50%       { opacity: 0.65; }
+}
+@keyframes holo-drift {
+  0%   { transform: translateY(0px)  translateX(0px); }
+  25%  { transform: translateY(-5px) translateX(3px); }
+  50%  { transform: translateY(-8px) translateX(0px); }
+  75%  { transform: translateY(-5px) translateX(-3px); }
+  100% { transform: translateY(0px)  translateX(0px); }
 }
 
 /* ── Divider ─────────────────────────────────────────────────────────────── */

@@ -55,15 +55,87 @@ function ThinkingIndicator({ stage, elapsedMs }: { stage: NonNullable<StreamingS
   )
 }
 
+// ── Markdown renderer ──────────────────────────────────────────────────────────
+function inlineFmt(raw: string): string {
+  return raw
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*([^*\n]+)\*/g, '<em>$1</em>')
+    .replace(/`([^`\n]+)`/g, '<code style="background:rgba(255,255,255,0.1);border-radius:3px;padding:0.1em 0.3em;font-size:0.85em;font-family:monospace;color:#86efac">$1</code>')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener" style="color:#60a5fa;text-decoration:underline;text-underline-offset:2px">$1</a>')
+}
+
+function buildMdTable(lines: string[]): string {
+  const isAlign = (l: string) => /^[\s|:-]+$/.test(l)
+  const parseRow = (l: string) => l.split('|').slice(1, -1).map(c => c.trim())
+  const rows = lines.filter(l => !isAlign(l)).map(parseRow)
+  if (rows.length === 0) return ''
+  const [head, ...body] = rows
+  const ths = head.map(c => `<th style="text-align:left;padding:6px 10px;border-bottom:1px solid rgba(255,255,255,0.12);font-size:0.77em;font-weight:600;color:rgba(250,250,247,0.65);white-space:nowrap">${inlineFmt(c)}</th>`).join('')
+  const trs = body.map(r => `<tr>${r.map(c => `<td style="padding:5px 10px;border-bottom:1px solid rgba(255,255,255,0.04);font-size:0.83em;color:rgba(250,250,247,0.82)">${inlineFmt(c)}</td>`).join('')}</tr>`).join('')
+  return `<div style="overflow-x:auto;margin:0.5rem 0"><table style="width:100%;border-collapse:collapse;background:rgba(255,255,255,0.02);border-radius:8px"><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table></div>`
+}
+
 function formatContent(text: string): string {
-  return text
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.*?)\*/g, '<em>$1</em>')
-    .replace(/`([^`]+)`/g, '<code>$1</code>')
-    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
-    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
-    .replace(/\n/g, '<br />')
+  const lines = text.split('\n')
+  let html = ''
+  let i = 0
+  while (i < lines.length) {
+    const line = lines[i]
+
+    // Fenced code block
+    if (line.startsWith('```')) {
+      let code = ''
+      i++
+      while (i < lines.length && !lines[i].startsWith('```')) { code += lines[i] + '\n'; i++ }
+      i++
+      const esc = code.trim().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      html += `<pre style="background:rgba(0,0,0,0.35);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:0.75rem;overflow-x:auto;font-size:0.8em;font-family:monospace;line-height:1.5;margin:0.4rem 0">${esc}</pre>`
+      continue
+    }
+
+    // Table
+    if (line.startsWith('|')) {
+      const tbl: string[] = []
+      while (i < lines.length && lines[i].startsWith('|')) { tbl.push(lines[i]); i++ }
+      html += buildMdTable(tbl)
+      continue
+    }
+
+    // Headers
+    const h3 = line.match(/^###\s+(.+)/); if (h3) { html += `<h3 style="font-size:0.92em;font-weight:700;color:rgba(250,250,247,0.95);margin:0.8rem 0 0.25rem">${inlineFmt(h3[1])}</h3>`; i++; continue }
+    const h2 = line.match(/^##\s+(.+)/);  if (h2) { html += `<h2 style="font-size:1em;font-weight:700;color:rgba(250,250,247,0.95);margin:0.85rem 0 0.3rem">${inlineFmt(h2[1])}</h2>`; i++; continue }
+    const h1 = line.match(/^#\s+(.+)/);   if (h1) { html += `<h1 style="font-size:1.1em;font-weight:700;color:rgba(250,250,247,0.95);margin:0.9rem 0 0.35rem">${inlineFmt(h1[1])}</h1>`; i++; continue }
+
+    // Unordered list
+    if (/^[-*•]\s/.test(line)) {
+      const items: string[] = []
+      while (i < lines.length && /^[-*•]\s/.test(lines[i])) { items.push(lines[i].replace(/^[-*•]\s+/, '')); i++ }
+      html += `<ul style="margin:0.3rem 0 0.4rem 1.1rem;padding:0">${items.map(it => `<li style="margin-bottom:0.2rem">${inlineFmt(it)}</li>`).join('')}</ul>`
+      continue
+    }
+
+    // Ordered list
+    if (/^\d+[.)]\s/.test(line)) {
+      const items: string[] = []
+      while (i < lines.length && /^\d+[.)]\s/.test(lines[i])) { items.push(lines[i].replace(/^\d+[.)]\s+/, '')); i++ }
+      html += `<ol style="margin:0.3rem 0 0.4rem 1.1rem;padding:0">${items.map(it => `<li style="margin-bottom:0.2rem">${inlineFmt(it)}</li>`).join('')}</ol>`
+      continue
+    }
+
+    // Blockquote
+    if (line.startsWith('> ')) {
+      const items: string[] = []
+      while (i < lines.length && lines[i].startsWith('> ')) { items.push(lines[i].slice(2)); i++ }
+      html += `<blockquote style="border-left:3px solid rgba(99,102,241,0.5);padding:0.25rem 0 0.25rem 0.75rem;margin:0.4rem 0;color:rgba(250,250,247,0.6)">${items.map(inlineFmt).join('<br>')}</blockquote>`
+      continue
+    }
+
+    if (line.trim() === '') { html += '<div style="height:0.3rem"></div>'; i++; continue }
+    html += `<p style="margin:0 0 0.25rem">${inlineFmt(line)}</p>`
+    i++
+  }
+  return html
 }
 
 function governedLabel(m: ModelInfo): string {
@@ -309,8 +381,13 @@ export default function ChatPage() {
   // Streaming abort
   const abortRef = useRef<AbortController | null>(null)
 
-  const bottomRef   = useRef<HTMLDivElement>(null)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const bottomRef      = useRef<HTMLDivElement>(null)
+  const textareaRef    = useRef<HTMLTextAreaElement>(null)
+  const didAutoLoad    = useRef(false)
+
+  // Save to Knowledge
+  const [saveForm, setSaveForm]     = useState<{ msgId: string; title: string; type: string } | null>(null)
+  const [savedMsgId, setSavedMsgId] = useState<string | null>(null)
 
   // Cleanup elapsed timer on unmount
   useEffect(() => () => { if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current) }, [])
@@ -330,7 +407,15 @@ export default function ChatPage() {
         if (free) setSelectedModel(free.id)
       })
       .catch(() => {})
-    api.getConversations().then(r => setConversations(r.data as Conversation[])).catch(() => {})
+    // Scope sessions to this browser tab — shared demo account shouldn't leak across visits
+    if (!sessionStorage.getItem('chat-session-start')) {
+      sessionStorage.setItem('chat-session-start', new Date().toISOString())
+    }
+    const sessionStart = sessionStorage.getItem('chat-session-start')!
+    api.getConversations().then(r => {
+      const all = r.data as Conversation[]
+      setConversations(all.filter(c => c.created_at >= sessionStart))
+    }).catch(() => {})
   }, [user])
 
   useEffect(() => {
@@ -343,6 +428,7 @@ export default function ChatPage() {
     const w = window as any
     setVoiceSupported(!!(w.SpeechRecognition || w.webkitSpeechRecognition))
   }, [])
+
 
   // ── Voice ────────────────────────────────────────────────────────────────────
   const toggleVoice = useCallback(() => {
@@ -600,7 +686,11 @@ export default function ChatPage() {
             if (routedModel && routedModel !== selectedModel) setSelectedModel(routedModel)
             stopElapsed()
             setStreamingStage(null)
-            api.getConversations().then(r => setConversations(r.data as Conversation[])).catch(() => {})
+            const ss = sessionStorage.getItem('chat-session-start')
+            api.getConversations().then(r => {
+              const all = r.data as Conversation[]
+              setConversations(ss ? all.filter(c => c.created_at >= ss) : all)
+            }).catch(() => {})
           }
         }
       }
@@ -642,6 +732,18 @@ export default function ChatPage() {
     setSidebarOpen(false)
   }, [])
 
+  // Auto-load conversation from ?cid= param (set by playbook launch flow)
+  useEffect(() => {
+    if (didAutoLoad.current || conversations.length === 0) return
+    const cid = new URLSearchParams(window.location.search).get('cid')
+    if (!cid) return
+    const target = conversations.find(c => c.id === cid)
+    if (target) {
+      didAutoLoad.current = true
+      selectConversation(target)
+    }
+  }, [conversations, selectConversation])
+
   const startNew = () => {
     setActiveConvId(null)
     setMessages([])
@@ -649,6 +751,22 @@ export default function ChatPage() {
     setError(null)
     setAttachments([])
     setSidebarOpen(false)
+  }
+
+  const handleSaveToKnowledge = async (msgId: string, content: string) => {
+    if (!saveForm) return
+    try {
+      await api.createKnowledgeAsset({
+        title: saveForm.title.trim() || 'Saved from Chat',
+        type: saveForm.type,
+        content,
+        source_type: 'conversation',
+        source_id: activeConvId,
+      })
+      setSaveForm(null)
+      setSavedMsgId(msgId)
+      setTimeout(() => setSavedMsgId(id => id === msgId ? null : id), 3000)
+    } catch { /* non-critical */ }
   }
 
   if (authLoading || !user) return null
@@ -701,25 +819,26 @@ export default function ChatPage() {
             </svg>
           </button>
           <div className="logo-mark flex-shrink-0" style={{ width: 20, height: 20, fontSize: 10, borderRadius: 6 }}>A</div>
-          <span className="text-sm font-semibold text-white hidden sm:block">Aegis Lite</span>
+          <span className="text-sm font-semibold hidden sm:block" style={{ color: '#e8c44a', letterSpacing: '0.01em' }}>Aegis Lite</span>
           <div className="divider hidden sm:block" style={{ height: 16 }} />
           <AppNav currentPage="/chat" />
 
-          <div className="ml-auto flex items-center gap-3">
-            {/* Runtime health indicators */}
+          <div className="ml-auto flex items-center gap-2 min-w-0">
+            {/* Runtime health indicators — desktop only */}
             <div className="hidden lg:block">
               <RuntimeStatus />
             </div>
-            {/* Streaming status indicator */}
+            {/* Streaming status */}
             {isStreaming && (
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 flex-shrink-0">
                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                 <span className="text-[10px] font-mono text-emerald-600 hidden sm:block">streaming</span>
               </div>
             )}
+            {/* Model selector — hidden on mobile, visible sm+ */}
             <select value={selectedModel} onChange={e => setSelectedModel(e.target.value)}
               disabled={sending}
-              className="text-[11px] border rounded-lg px-2 py-1 focus:outline-none focus:border-blue-500/50 transition-colors cursor-pointer disabled:opacity-50"
+              className="hidden sm:block text-[11px] border rounded-lg px-2 py-1 focus:outline-none focus:border-blue-500/50 transition-colors cursor-pointer disabled:opacity-50 flex-shrink-0"
               style={{ background: 'var(--surface-3)', borderColor: 'rgba(255,255,255,0.08)', color: '#9ca3af' }}>
               {models.map(m => (
                 <option key={m.id} value={m.id}>{governedLabel(m)}</option>
@@ -811,6 +930,61 @@ export default function ChatPage() {
                     {m.role === 'assistant' && governanceMap.has(m.id) && (
                       <GovernancePipeline meta={governanceMap.get(m.id)!} />
                     )}
+
+                    {m.role === 'assistant' && !m.isStreaming && m.content && (
+                      <div className="mt-1.5 flex items-center">
+                        {saveForm?.msgId === m.id ? (
+                          <form
+                            onSubmit={e => { e.preventDefault(); handleSaveToKnowledge(m.id, m.content) }}
+                            className="flex items-center gap-1.5 flex-wrap">
+                            <input
+                              type="text"
+                              value={saveForm.title}
+                              onChange={e => setSaveForm(f => f ? { ...f, title: e.target.value } : f)}
+                              placeholder="Title (or leave blank)"
+                              autoFocus
+                              className="text-[10px] px-2 py-1 rounded border focus:outline-none focus:border-blue-500/40"
+                              style={{ background: 'var(--surface-3)', borderColor: 'rgba(255,255,255,0.08)', color: '#e5e7eb', width: 150 }}
+                            />
+                            <select
+                              value={saveForm.type}
+                              onChange={e => setSaveForm(f => f ? { ...f, type: e.target.value } : f)}
+                              className="text-[10px] px-1.5 py-1 rounded border focus:outline-none"
+                              style={{ background: 'var(--surface-3)', borderColor: 'rgba(255,255,255,0.08)', color: '#9ca3af' }}>
+                              <option value="other">Other</option>
+                              <option value="research">Research</option>
+                              <option value="policy">Policy</option>
+                              <option value="compliance">Compliance</option>
+                              <option value="sop">SOP</option>
+                              <option value="risk_assessment">Risk Assessment</option>
+                              <option value="presentation">Presentation</option>
+                            </select>
+                            <button type="submit"
+                              className="text-[10px] text-blue-400 hover:text-blue-300 transition-colors cursor-pointer">
+                              Save
+                            </button>
+                            <button type="button" onClick={() => setSaveForm(null)}
+                              className="text-[10px] text-gray-600 hover:text-gray-400 transition-colors cursor-pointer">
+                              Cancel
+                            </button>
+                          </form>
+                        ) : savedMsgId === m.id ? (
+                          <span className="text-[10px] text-emerald-600 font-mono flex items-center gap-1">
+                            <span>✓</span> Saved to Knowledge
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => setSaveForm({ msgId: m.id, title: '', type: 'other' })}
+                            className="text-[10px] text-gray-700 hover:text-gray-500 transition-colors flex items-center gap-1 cursor-pointer"
+                            title="Save to Knowledge Library">
+                            <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                            </svg>
+                            Save to Knowledge
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -834,6 +1008,19 @@ export default function ChatPage() {
         {/* ── Composer ──────────────────────────────────────────────────────── */}
         <div className="flex-shrink-0 border-t border-white/[0.06] px-4 py-3">
           <div className="max-w-2xl mx-auto">
+            {/* Model selector on mobile only */}
+            {models.length > 0 && (
+              <div className="sm:hidden mb-2 flex items-center justify-end">
+                <select value={selectedModel} onChange={e => setSelectedModel(e.target.value)}
+                  disabled={sending}
+                  className="text-[10px] border rounded-md px-1.5 py-1 focus:outline-none transition-colors cursor-pointer disabled:opacity-50"
+                  style={{ background: 'var(--surface-3)', borderColor: 'rgba(255,255,255,0.08)', color: '#6b7280' }}>
+                  {models.map(m => (
+                    <option key={m.id} value={m.id}>{governedLabel(m)}</option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <div
               className={`relative rounded-xl border transition-all ${

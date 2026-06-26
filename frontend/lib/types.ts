@@ -136,6 +136,133 @@ export interface AISystem {
   created_at: string
 }
 
+// ── Playbook types ─────────────────────────────────────────────────────────────
+
+export interface Playbook {
+  id: string
+  name: string
+  slug: string
+  description: string | null
+  purpose: string | null
+  instructions: string | null
+  approved_models: string[]
+  agent_ids: string[]
+  knowledge_sources: Record<string, unknown>[]
+  output_standards: string | null
+  category: string | null
+  visibility: 'private' | 'team' | 'org'
+  status: 'draft' | 'active' | 'deprecated'
+  workspace_id: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+  execution_count: number
+}
+
+export interface PlaybookExecution {
+  id: string
+  playbook_id: string
+  playbook_name: string
+  user_id: string
+  workspace_id: string | null
+  conversation_id: string | null
+  status: 'running' | 'completed' | 'failed'
+  started_at: string
+  completed_at: string | null
+}
+
+// ── Workspace types ────────────────────────────────────────────────────────────
+
+export interface Workspace {
+  id: string
+  name: string
+  slug: string
+  description: string | null
+  budget_limit_usd: number | null
+  risk_threshold: 'low' | 'medium' | 'high'
+  is_active: boolean
+  created_by: string
+  created_at: string
+  updated_at: string
+  member_count: number
+  spend_30d?: number
+}
+
+export interface WorkspaceMember {
+  id: string
+  workspace_id: string
+  user_id: string
+  user_name: string
+  user_email: string
+  role: 'owner' | 'member' | 'viewer'
+  joined_at: string
+}
+
+// ── Knowledge types ────────────────────────────────────────────────────────────
+
+export type KnowledgeAssetType = 'sop' | 'research' | 'policy' | 'compliance' | 'risk_assessment' | 'presentation' | 'other'
+export type KnowledgeAssetStatus = 'draft' | 'pending_review' | 'approved' | 'published' | 'deprecated'
+
+export interface KnowledgeAsset {
+  id: string
+  title: string
+  type: KnowledgeAssetType
+  summary: string | null
+  content: string
+  source_type: string | null
+  source_id: string | null
+  tags: string[]
+  status: KnowledgeAssetStatus
+  version: number
+  reuse_count: number
+  workspace_id: string | null
+  created_by: string
+  approved_by: string | null
+  published_by: string | null
+  created_at: string
+  updated_at: string
+  approved_at: string | null
+  published_at: string | null
+}
+
+// ── Executive types ────────────────────────────────────────────────────────────
+
+export interface ExecutiveSummary {
+  window_days: number
+  generated_at: string
+  kpis: {
+    adoption_pct: number
+    active_users: number
+    total_users: number
+    total_spend_usd: number
+    total_requests: number
+    critical_events: number
+  }
+  policy_breakdown: Record<string, number>
+  top_contributors: {
+    email: string
+    name: string
+    request_count: number
+    total_cost: number
+  }[]
+  department_utilization: {
+    department: string
+    active_users: number
+    total_users: number
+    request_count: number
+    total_cost: number
+    utilization_pct: number
+  }[]
+  top_knowledge_assets: {
+    id: string
+    title: string
+    type: string
+    reuse_count: number
+    status: string
+    created_at: string
+  }[]
+}
+
 // ── Usage types ────────────────────────────────────────────────────────────────
 
 export interface UsageByModel {

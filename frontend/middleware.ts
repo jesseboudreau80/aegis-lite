@@ -8,7 +8,9 @@ const PUBLIC_PREFIXES = [
   '/api/health',             // liveness probe
   '/api/models',             // model list for landing page
   '/api/early-access',       // waitlist — no auth
+  '/api/assistant/',         // public prospecting/onboarding assistant
   '/api/governance/stream',  // SSE stream — auth via ?token= query param
+  '/api/.well-known/',       // service metadata (version, capabilities) — public
 ]
 
 // ── HTTPS enforcement ──────────────────────────────────────────────────────────

@@ -23,7 +23,7 @@ async def call_openrouter(
 
         api_model = MODEL_INFO.get(model, {}).get("api_model", model)
         client = AsyncOpenAI(
-            api_key=settings.openrouter_api_key,
+            api_key=settings.openrouter_api_key or "free",
             base_url=_OPENROUTER_BASE_URL,
             timeout=_TIMEOUT_SECONDS,
         )
@@ -77,7 +77,7 @@ async def stream_openrouter(
 
     api_model = MODEL_INFO.get(model, {}).get("api_model", model)
     client = AsyncOpenAI(
-        api_key=settings.openrouter_api_key,
+        api_key=settings.openrouter_api_key or "free",
         base_url=_OPENROUTER_BASE_URL,
         timeout=_TIMEOUT_SECONDS,
     )

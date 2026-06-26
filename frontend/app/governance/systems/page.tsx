@@ -98,7 +98,7 @@ export default function SystemsPage() {
     <div className="flex flex-col h-full" style={{ background: 'var(--surface-1)' }}>
       <header className="page-header">
         <div className="logo-mark">A</div>
-        <span className="text-sm font-semibold text-white hidden sm:block">Aegis Lite</span>
+        <span className="text-sm font-semibold hidden sm:block" style={{ color: '#e8c44a', letterSpacing: '0.01em' }}>Aegis Lite</span>
         <div className="divider hidden sm:block" style={{ height: 16 }} />
         <AppNav currentPage="/governance/systems" />
       </header>

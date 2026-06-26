@@ -141,6 +141,43 @@ export const api = {
   getGovernanceActivity: (params?: { limit?: number; since?: string }) =>
     _client.get('/governance/activity', { params }),
 
+  // Executive dashboard
+  getExecutiveSummary: (days?: number) => _client.get('/governance/executive', { params: { days } }),
+
+  // Playbooks
+  getPlaybooks: (params?: { category?: string; status?: string }) => _client.get('/playbooks', { params }),
+  createPlaybook: (data: unknown) => _client.post('/playbooks', data),
+  getPlaybook: (id: string) => _client.get(`/playbooks/${id}`),
+  updatePlaybook: (id: string, data: unknown) => _client.put(`/playbooks/${id}`, data),
+  deletePlaybook: (id: string) => _client.delete(`/playbooks/${id}`),
+  launchPlaybook: (id: string, data: { workspace_id?: string | null; context?: string | null; model?: string | null }) =>
+    _client.post(`/playbooks/${id}/launch`, data),
+  getPlaybookExecutions: () => _client.get('/playbooks/executions'),
+
+  // Knowledge
+  getKnowledge: (params?: { type?: string; status?: string; workspace_id?: string }) =>
+    _client.get('/knowledge', { params }),
+  createKnowledgeAsset: (data: unknown) => _client.post('/knowledge', data),
+  getKnowledgeAsset: (id: string) => _client.get(`/knowledge/${id}`),
+  updateKnowledgeAsset: (id: string, data: unknown) => _client.put(`/knowledge/${id}`, data),
+  deleteKnowledgeAsset: (id: string) => _client.delete(`/knowledge/${id}`),
+  publishKnowledgeAsset: (id: string) => _client.post(`/knowledge/${id}/publish`),
+  reuseKnowledgeAsset: (id: string) => _client.post(`/knowledge/${id}/reuse`),
+
+  // Workspaces
+  getWorkspaces: () => _client.get('/workspaces'),
+  createWorkspace: (data: unknown) => _client.post('/workspaces', data),
+  getWorkspace: (id: string) => _client.get(`/workspaces/${id}`),
+  updateWorkspace: (id: string, data: unknown) => _client.put(`/workspaces/${id}`, data),
+  deleteWorkspace: (id: string) => _client.delete(`/workspaces/${id}`),
+  getWorkspaceMembers: (id: string) => _client.get(`/workspaces/${id}/members`),
+  addWorkspaceMember: (id: string, data: { email: string; role: string }) =>
+    _client.post(`/workspaces/${id}/members`, data),
+  removeWorkspaceMember: (wsId: string, userId: string) =>
+    _client.delete(`/workspaces/${wsId}/members/${userId}`),
+  getWorkspaceActivity: (id: string, limit?: number) =>
+    _client.get(`/workspaces/${id}/activity`, { params: { limit } }),
+
   // Streaming chat — use fetch directly, not axios (SSE)
   chatStreamUrl: '/api/chat/stream',
 

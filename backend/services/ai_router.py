@@ -148,9 +148,7 @@ async def _dispatch(
         return text, in_tok, out_tok, routing_meta
 
     # OpenRouter (Mistral, Llama, Gemini, etc.)
-    if not _key_is_configured(settings.openrouter_api_key):
-        text, i, o = _demo_response(model, messages)
-        return text, i, o, routing_meta
+    # Free-tier models on OpenRouter work without a real API key — always attempt.
     text, in_tok, out_tok = await call_openrouter(model, messages, system)
     return text, in_tok, out_tok, routing_meta
 

@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from 'next/font/google'
 import { AuthProvider } from '@/context/AuthContext'
 import OnboardingGuide from '@/components/OnboardingGuide'
 import AegisBadge from '@/components/AegisBadge'
+import AssistantWidget from '@/components/AssistantWidget'
 import './globals.css'
 
 const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] })
@@ -29,9 +30,10 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
-      { url: '/favicon.svg', type: 'image/svg+xml' },
+      { url: '/favicon.ico', type: 'image/x-icon', sizes: '32x32' },
+      { url: '/aegis-shield.png', type: 'image/png', sizes: '512x512' },
     ],
-    apple: '/favicon.svg',
+    apple: '/aegis-shield.png',
   },
 }
 
@@ -39,7 +41,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full`}>
       <head>
-        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+        <link rel="icon" href="/favicon.ico" sizes="32x32" />
+        <link rel="icon" href="/aegis-shield.png" type="image/png" sizes="512x512" />
         <meta name="theme-color" content="#1A1A18" />
         <meta name="color-scheme" content="dark" />
       </head>
@@ -48,6 +51,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <OnboardingGuide />
           {children}
           <AegisBadge />
+          <AssistantWidget />
         </AuthProvider>
       </body>
     </html>
