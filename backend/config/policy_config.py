@@ -105,6 +105,16 @@ PII_RULES: list[tuple[re.Pattern, str, str]] = [
         "credit_card",
         "redact",
     ),
+    (
+        # IBAN: 2-letter country + 2 check digits + BBAN (spaces optional).
+        # Covers common lengths e.g. GB (22), DE (22), FR (27). See issue #2.
+        re.compile(
+            r"\b[A-Z]{2}\d{2}[\s]?(?:[A-Z0-9]{4}[\s]?){3,7}[A-Z0-9]{1,4}\b",
+            re.IGNORECASE,
+        ),
+        "iban",
+        "redact",
+    ),
 ]
 
 PII_RISK_DELTA: float = 0.20
